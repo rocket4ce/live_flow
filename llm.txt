@@ -1,0 +1,279 @@
+# LiveFlow - LLM Quick Reference
+
+LiveFlow is a Phoenix LiveView library for interactive node-based flow diagrams.
+
+## Installation
+
+```elixir
+# mix.exs
+{:live_flow, "~> 0.1.0"}
+```
+
+```javascript
+// assets/js/app.js
+import { LiveFlowHook } from "live_flow"
+let liveSocket = new LiveSocket("/live", Socket, {
+  hooks: { LiveFlow: LiveFlowHook }
+})
+```
+
+```css
+/* assets/css/app.css */
+@import "../../deps/live_flow/assets/css/live_flow.css";
+```
+
+## Core Pattern: Parent LiveView Owns State
+
+CRITICAL: The parent LiveView is the SINGLE SOURCE OF TRUTH. Never store authoritative state in the Flow LiveComponent — it gets overwritten on every `update/2`.
+
+```elixir
+defmodule MyAppWeb.FlowLive do
+  use MyAppWeb, :live_view
+  alias LiveFlow.{State, Node, Edge, Handle, History, Clipboard}
+  alias LiveFlow.Validation.Connection
+
+  def mount(_params, _session, socket) do
+    flow = State.new(
+      nodes: [
+        Node.new("1", %{x: 100, y: 100}, %{label: "Start"}),
+        Node.new("2", %{x: 300, y: 200}, %{label: "End"})
+      ],
+      edges: [Edge.new("e1", "1", "2")]
+    )
+    {:ok, assign(socket, flow: flow)}
+  end
+
+  def render(assigns) do
+    ~H"""
+    <div style="height: 600px;">
+      <.live_component
+        module={LiveFlow.Components.Flow}
+        id="my-flow"
+        flow={@flow}
+        opts={%{controls: true, background: :dots}}
+      />
+    </div>
+    """
+  end
+end
+```
+
+## Required Event Handlers
+
+All events use `pushEvent` (go to parent LiveView, NOT the LiveComponent).
+
+```elixir
+# Node position/dimension/removal changes
+def handle_event("lf:node_change", params, socket) do
+  flow = LiveFlow.Changes.NodeChange.apply(socket.assigns.flow, params)
+  {:noreply, assign(socket, flow: flow)}
+end
+
+# Edge changes
+def handle_event("lf:edge_change", params, socket) do
+  flow = LiveFlow.Changes.EdgeChange.apply(socket.assigns.flow, params)
+  {:noreply, assign(socket, flow: flow)}
+end
+
+# New connection completed
+def handle_event("lf:connect_end", params, socket) do
+  case Connection.validate_and_create(socket.assigns.flow, params) do
+    {:ok, flow} -> {:noreply, assign(socket, flow: flow)}
+    {:error, _} -> {:noreply, socket}
+  end
+end
+
+# Viewport pan/zoom
+def handle_event("lf:viewport_change", params, socket) do
+  flow = State.update_viewport(socket.assigns.flow, params)
+  {:noreply, assign(socket, flow: flow)}
+end
+
+# Selection changed
+def handle_event("lf:selection_change", %{"nodes" => nodes, "edges" => edges}, socket) do
+  flow = socket.assigns.flow
+  flow = %{flow |
+    selected_nodes: MapSet.new(nodes),
+    selected_edges: MapSet.new(edges),
+    nodes: Map.new(flow.nodes, fn {id, n} -> {id, %{n | selected: id in nodes}} end),
+    edges: Map.new(flow.edges, fn {id, e} -> {id, %{e | selected: id in edges}} end)
+  }
+  {:noreply, assign(socket, flow: flow)}
+end
+
+# Delete key pressed
+def handle_event("lf:delete_selected", _params, socket) do
+  {:noreply, assign(socket, flow: State.delete_selected(socket.assigns.flow))}
+end
+
+# Catch-all for other lf: events
+def handle_event("lf:" <> _, _params, socket), do: {:noreply, socket}
+```
+
+## Flow Component Options
+
+```elixir
+opts={%{
+  controls: true,           # Zoom +/- buttons
+  background: :dots,        # :dots | :lines | :cross | nil
+  minimap: false,            # Minimap overlay
+  snap_to_grid: false,       # Grid snapping
+  grid_size: 20,             # Grid size in px
+  helper_lines: false,       # Alignment guides on drag
+  fit_view_on_init: false,   # Auto-fit on mount
+  theme: "dark",             # Theme name
+  cursors: false,            # Remote cursors (collaboration)
+  default_edge_type: :bezier # :bezier | :straight | :step | :smoothstep
+}}
+```
+
+## Creating Nodes
+
+```elixir
+Node.new(id, position, data, opts \\ [])
+Node.new("n1", %{x: 100, y: 100}, %{label: "My Node"},
+  type: :custom,
+  handles: [
+    Handle.new(:source, :right),
+    Handle.new(:target, :left, id: "input-1", connect_type: :string)
+  ]
+)
+```
+
+## Creating Edges
+
+```elixir
+Edge.new(id, source_node_id, target_node_id, opts \\ [])
+Edge.new("e1", "n1", "n2", type: :smoothstep, animated: true, label: "connects")
+```
+
+## Custom Node Types
+
+Pass `node_types` map to Flow. Keys match `node.type` atom.
+
+```elixir
+# Function component
+defp my_node(assigns) do
+  ~H"""
+  <div class="p-4 bg-white rounded shadow">
+    <LiveFlow.Components.Handle.handle type={:target} position={:top} />
+    <div>{@node.data[:label]}</div>
+    <LiveFlow.Components.Handle.handle type={:source} position={:bottom} />
+  </div>
+  """
+end
+
+<.live_component module={LiveFlow.Components.Flow} id="flow"
+  flow={@flow}
+  node_types={%{custom: &my_node/1}}
+/>
+```
+
+## Undo/Redo
+
+```elixir
+# In mount
+history = History.new(max_entries: 50)
+
+# Before mutations, push current state
+history = History.push(history, flow)
+
+# Undo/Redo
+case History.undo(history, flow) do
+  {:ok, restored_flow, updated_history} -> ...
+  :empty -> ...
+end
+```
+
+## Copy/Paste
+
+```elixir
+clipboard = Clipboard.new()
+clipboard = Clipboard.copy(clipboard, flow)          # copy selected
+{clipboard, flow} = Clipboard.cut(clipboard, flow)   # cut selected
+{:ok, flow, clipboard} = Clipboard.paste(clipboard, flow)
+```
+
+## Serialization
+
+```elixir
+json = LiveFlow.Serializer.to_json(flow)
+{:ok, flow} = LiveFlow.Serializer.from_json(json)
+```
+
+## Connection Validation
+
+```elixir
+validators = [
+  &Validation.no_duplicate_edges/2,
+  &Validation.nodes_exist/2,
+  &Validation.no_cycles/2,
+  &Validation.max_connections(flow, params, max: 1)  # wrap in closure for opts
+]
+case Validation.validate(flow, params, validators) do
+  :ok -> ...
+  {:error, reason} -> ...
+end
+
+# Or use presets
+Validation.preset(:default)  # no_duplicate_edges + nodes_exist
+Validation.preset(:strict)   # + handles_valid
+```
+
+## Collaboration
+
+```elixir
+# In mount
+socket = LiveFlow.Collaboration.join(socket, "flow:room-1", user,
+  pubsub: MyApp.PubSub,
+  presence: MyAppWeb.Presence  # optional
+)
+
+# In handle_info
+def handle_info(msg, socket) do
+  case LiveFlow.Collaboration.handle_info(msg, socket) do
+    {:ok, socket} -> {:noreply, socket}
+    :ignore -> {:noreply, socket}
+  end
+end
+
+# Broadcast after local changes
+socket = LiveFlow.Collaboration.broadcast_change(socket, {:node_changes, changes})
+```
+
+## Auto-Layout (ELK)
+
+```elixir
+# Server sends layout data, client runs ELK, sends back positions
+data = LiveFlow.Layout.prepare_layout_data(flow, direction: "DOWN")
+push_event(socket, "lf:layout_data", data)
+```
+
+## Key Anti-Patterns to AVOID
+
+1. NEVER store state in Flow LiveComponent and relay to parent — causes race conditions
+2. NEVER insert DOM elements inside LiveView-managed viewport — they get removed on re-render
+3. NEVER send server events during drag preview — use client-side only (connection preview line)
+4. NEVER use `pushEventTo` for state-modifying events — always `pushEvent` to parent
+5. NEVER forget the container needs a defined height (the Flow fills its parent)
+
+## Module Reference
+
+- `LiveFlow` — Top-level delegates (new_state, new_node, new_edge, create_flow)
+- `LiveFlow.State` — CRUD for nodes/edges, selection, viewport, bounds
+- `LiveFlow.Node` — Node struct (new, update, move, bounds, center)
+- `LiveFlow.Edge` — Edge struct (new, update, connects_to?)
+- `LiveFlow.Handle` — Handle struct (new, source/target shorthands)
+- `LiveFlow.Viewport` — Viewport struct (x, y, zoom)
+- `LiveFlow.Components.Flow` — Main LiveComponent
+- `LiveFlow.Components.Handle` — Handle component for custom nodes
+- `LiveFlow.Changes.NodeChange` — Apply node change events
+- `LiveFlow.Changes.EdgeChange` — Apply edge change events
+- `LiveFlow.History` — Undo/redo (push, undo, redo)
+- `LiveFlow.Clipboard` — Copy/paste (copy, cut, paste)
+- `LiveFlow.Serializer` — JSON import/export
+- `LiveFlow.Validation` — Composable connection validators
+- `LiveFlow.Validation.Connection` — validate_and_create helper
+- `LiveFlow.Collaboration` — Real-time multi-user (join, broadcast, handle_info)
+- `LiveFlow.Layout` — Auto-layout data preparation (ELK, tree)
+- `LiveFlow.Paths.*` — Bezier, Straight, Step, Smoothstep path calculations
