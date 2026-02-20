@@ -13,6 +13,7 @@ import { SelectionManager } from '../interaction/selection.js';
 import { CursorManager } from '../interaction/cursor.js';
 import { HelperLinesManager } from '../interaction/helper_lines.js';
 import { exportSVG, exportPNG, downloadString, downloadBlob } from '../utils/export.js';
+import { calculateBezierPath } from '../utils/paths.js';
 import { getLayoutedElements } from '../utils/layout.js';
 
 export const LiveFlowHook = {
@@ -97,6 +98,23 @@ export const LiveFlowHook = {
     this.handleEvent('lf:cursor_leave', (data) => {
       if (this.cursor) {
         this.cursor.removeCursor(data.user_id);
+      }
+    });
+
+    // Remote drag — update node positions and edge paths directly in DOM (no re-render)
+    this.handleEvent('lf:remote_drag', (data) => {
+      if (!data.changes) return;
+      const movedIds = new Set();
+      for (const change of data.changes) {
+        const el = this.nodeLayer?.querySelector(`[data-node-id="${change.id}"]`);
+        if (el && change.position) {
+          el.style.left = `${change.position.x}px`;
+          el.style.top = `${change.position.y}px`;
+          movedIds.add(change.id);
+        }
+      }
+      if (movedIds.size > 0) {
+        this._updateEdgesForNodes(movedIds);
       }
     });
 
@@ -923,6 +941,45 @@ export const LiveFlowHook = {
     const { x, y, zoom } = this.viewport;
     this.viewportEl.style.transform = `translate(${x}px, ${y}px) scale(${zoom})`;
     this.cursor?.repositionAll();
+  },
+
+  // ===== Remote Edge Updates =====
+
+  /**
+   * Update edge SVG paths for edges connected to the given node IDs.
+   * Used for remote drag updates to keep edges visually connected.
+   */
+  _updateEdgesForNodes(nodeIds) {
+    const edgeGroups = this.edgeLayer?.querySelectorAll('g[data-edge-id]');
+    if (!edgeGroups) return;
+
+    edgeGroups.forEach(g => {
+      const sourceId = g.dataset.source;
+      const targetId = g.dataset.target;
+      if (!sourceId || !targetId) return;
+      if (!nodeIds.has(sourceId) && !nodeIds.has(targetId)) return;
+
+      const sourceHandlePos = this.nodeDrag.getHandlePosition(sourceId, g.dataset.sourceHandle, 'source');
+      const targetHandlePos = this.nodeDrag.getHandlePosition(targetId, g.dataset.targetHandle, 'target');
+      const sourceCoords = this.nodeDrag.getHandleCoords(sourceId, sourceHandlePos);
+      const targetCoords = this.nodeDrag.getHandleCoords(targetId, targetHandlePos);
+      if (!sourceCoords || !targetCoords) return;
+
+      const pathD = calculateBezierPath(
+        sourceCoords.x, sourceCoords.y, sourceHandlePos,
+        targetCoords.x, targetCoords.y, targetHandlePos
+      );
+
+      g.querySelectorAll('path').forEach(p => p.setAttribute('d', pathD));
+
+      // Update label/insert button positions (midpoint)
+      const midX = (sourceCoords.x + targetCoords.x) / 2;
+      const midY = (sourceCoords.y + targetCoords.y) / 2;
+      const label = g.querySelector('.lf-edge-label-wrapper');
+      if (label) { label.setAttribute('x', midX - 50); label.setAttribute('y', midY - 10); }
+      const insert = g.querySelector('.lf-edge-insert-wrapper');
+      if (insert) { insert.setAttribute('x', midX - 12); insert.setAttribute('y', midY - 12); }
+    });
   },
 
   // ===== Server Communication =====

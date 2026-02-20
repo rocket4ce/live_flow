@@ -1,5 +1,16 @@
 # Changelog
 
+## v0.2.2 (2026-02-20)
+
+### Performance — Realtime Collaboration
+
+- **`broadcast_from` instead of `broadcast`.** PubSub messages now skip the sender process entirely, eliminating self-filtering overhead and reducing message processing by ~N per broadcast (where N = number of connected users).
+- **Live drag broadcasting.** Intermediate node positions are broadcast to remote users every 100ms during drag (via `lf:drag_move`), so other users see live movement instead of position jumps at drag end. Uses a lightweight DOM-only update path — no flow state change or LiveView re-render on receivers.
+- **Smooth cursor interpolation.** Remote cursors now use lerp (linear interpolation) animation at 60fps instead of jumping between positions, providing fluid cursor movement.
+- **Reduced cursor throttle.** Local cursor broadcast interval reduced from 100ms to 50ms for more responsive cursor tracking.
+- **Server-side cursor throttle.** Added Process dictionary-based throttle in the example LiveView to prevent PubSub flooding with many concurrent users.
+- **Client-side remote edge updates.** When receiving remote drag positions, edge SVG paths are recalculated client-side to stay visually connected to moving nodes.
+
 ## v0.2.1 (2026-02-20)
 
 ### Bug Fixes

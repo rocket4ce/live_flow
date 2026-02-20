@@ -292,7 +292,23 @@ defmodule ExampleWeb.FlowRealtimeLive do
 
   @impl true
   def handle_event("lf:cursor_move", %{"x" => x, "y" => y}, socket) do
-    socket = Collaboration.broadcast_cursor(socket, x, y)
+    # Server-side throttle to prevent PubSub flooding with many concurrent users
+    now = System.monotonic_time(:millisecond)
+    last = Process.get(:lf_cursor_throttle, 0)
+
+    if now - last >= 50 do
+      Process.put(:lf_cursor_throttle, now)
+      socket = Collaboration.broadcast_cursor(socket, x, y)
+      {:noreply, socket}
+    else
+      {:noreply, socket}
+    end
+  end
+
+  @impl true
+  def handle_event("lf:drag_move", %{"changes" => changes}, socket) do
+    # Broadcast intermediate drag positions — DOM-only update on receivers (no re-render)
+    Collaboration.broadcast_drag_move(socket, changes)
     {:noreply, socket}
   end
 

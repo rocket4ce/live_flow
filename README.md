@@ -31,7 +31,7 @@ Add `live_flow` to your dependencies in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:live_flow, "~> 0.2.1"}
+    {:live_flow, "~> 0.2.2"}
   ]
 end
 ```

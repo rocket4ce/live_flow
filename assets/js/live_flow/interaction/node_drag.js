@@ -268,6 +268,33 @@ export class NodeDragManager {
 
     // Update edge SVG paths client-side (instant, no server round-trip)
     this.updateEdgePaths();
+
+    // Broadcast intermediate positions to remote users (throttled)
+    this._throttleDragBroadcast();
+  }
+
+  /**
+   * Throttled broadcast of drag positions for remote collaboration.
+   * Sends intermediate positions so other users see live movement.
+   */
+  _throttleDragBroadcast() {
+    const now = Date.now();
+    if (now - (this._lastDragBroadcast || 0) < 100) return;
+    this._lastDragBroadcast = now;
+
+    const changes = [];
+    this.clientPositions.forEach(({ x, y }, nodeId) => {
+      changes.push({
+        type: 'position',
+        id: nodeId,
+        position: { x, y },
+        dragging: true
+      });
+    });
+
+    if (changes.length > 0) {
+      this.hook.pushEvent('lf:drag_move', { changes });
+    }
   }
 
   /**

@@ -147,10 +147,33 @@ defmodule LiveFlow.Collaboration do
   def broadcast_change(socket, change) do
     assigns = socket.assigns
 
-    Phoenix.PubSub.broadcast(
+    Phoenix.PubSub.broadcast_from(
       assigns.lf_pubsub,
+      self(),
       assigns.lf_topic,
       {:lf_flow_change, assigns.lf_user.id, change}
+    )
+
+    socket
+  end
+
+  @doc """
+  Broadcasts intermediate drag positions to other users.
+
+  Uses a lightweight message type that receivers handle client-side
+  (DOM update only, no flow state change or re-render) for maximum
+  performance during live dragging.
+  """
+  @spec broadcast_drag_move(Phoenix.LiveView.Socket.t(), list()) ::
+          Phoenix.LiveView.Socket.t()
+  def broadcast_drag_move(socket, changes) do
+    assigns = socket.assigns
+
+    Phoenix.PubSub.broadcast_from(
+      assigns.lf_pubsub,
+      self(),
+      assigns.lf_topic,
+      {:lf_drag_move, assigns.lf_user.id, changes}
     )
 
     socket
@@ -167,8 +190,9 @@ defmodule LiveFlow.Collaboration do
     assigns = socket.assigns
     user = assigns.lf_user
 
-    Phoenix.PubSub.broadcast(
+    Phoenix.PubSub.broadcast_from(
       assigns.lf_pubsub,
+      self(),
       "#{assigns.lf_topic}:cursors",
       {:lf_cursor_move, user.id, %{x: x, y: y, name: user.name, color: user.color}}
     )
@@ -193,19 +217,15 @@ defmodule LiveFlow.Collaboration do
   """
   @spec handle_info(term(), Phoenix.LiveView.Socket.t()) ::
           {:ok, Phoenix.LiveView.Socket.t()} | :ignore
-  def handle_info({:lf_flow_change, sender_id, _change}, %{assigns: %{lf_user: %{id: sender_id}}} = _socket) do
-    # Skip changes from self — we already applied them locally
-    # Return :ignore so the LiveView can handle it if needed
-    :ignore
-  end
-
   def handle_info({:lf_flow_change, _sender_id, change}, socket) do
     flow = apply_remote_change(socket.assigns.flow, change)
     {:ok, Phoenix.Component.assign(socket, flow: flow)}
   end
 
-  def handle_info({:lf_cursor_move, sender_id, _cursor}, %{assigns: %{lf_user: %{id: sender_id}}} = _socket) do
-    :ignore
+  def handle_info({:lf_drag_move, _sender_id, changes}, socket) do
+    # Push directly to client for DOM-only update (no flow state change, no re-render)
+    socket = Phoenix.LiveView.push_event(socket, "lf:remote_drag", %{changes: changes})
+    {:ok, socket}
   end
 
   def handle_info({:lf_cursor_move, sender_id, cursor}, socket) do
