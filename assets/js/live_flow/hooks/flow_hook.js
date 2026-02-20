@@ -197,6 +197,10 @@ export const LiveFlowHook = {
   updated() {
     // Re-measure container on updates
     this.measureContainer();
+    // Re-apply client-side viewport transform after DOM patch — the server
+    // may have an older viewport state, and its re-render would overwrite
+    // the CSS transform causing a visible zoom/pan jump.
+    this.applyViewportTransform();
     // Re-apply client-side drag positions after DOM patch to prevent jitter
     if (this.nodeDrag.isDragging()) {
       this.nodeDrag.reapplyPositions();
