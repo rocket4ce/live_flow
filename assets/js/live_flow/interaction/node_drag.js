@@ -279,7 +279,7 @@ export class NodeDragManager {
    */
   _throttleDragBroadcast() {
     const now = Date.now();
-    if (now - (this._lastDragBroadcast || 0) < 100) return;
+    if (now - (this._lastDragBroadcast || 0) < 50) return;
     this._lastDragBroadcast = now;
 
     const changes = [];

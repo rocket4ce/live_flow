@@ -101,21 +101,32 @@ export const LiveFlowHook = {
       }
     });
 
-    // Remote drag — update node positions and edge paths directly in DOM (no re-render)
+    // Remote drag — lerp interpolate node positions for smooth movement
+    this._remoteDragTargets = new Map(); // nodeId -> { targetX, targetY, currentX, currentY, el }
+    this._remoteDragAnimating = false;
+
     this.handleEvent('lf:remote_drag', (data) => {
       if (!data.changes) return;
-      const movedIds = new Set();
       for (const change of data.changes) {
+        if (!change.position) continue;
         const el = this.nodeLayer?.querySelector(`[data-node-id="${change.id}"]`);
-        if (el && change.position) {
-          el.style.left = `${change.position.x}px`;
-          el.style.top = `${change.position.y}px`;
-          movedIds.add(change.id);
+        if (!el) continue;
+        let entry = this._remoteDragTargets.get(change.id);
+        if (!entry) {
+          entry = {
+            el,
+            currentX: parseFloat(el.style.left) || 0,
+            currentY: parseFloat(el.style.top) || 0,
+            targetX: change.position.x,
+            targetY: change.position.y
+          };
+          this._remoteDragTargets.set(change.id, entry);
+        } else {
+          entry.targetX = change.position.x;
+          entry.targetY = change.position.y;
         }
       }
-      if (movedIds.size > 0) {
-        this._updateEdgesForNodes(movedIds);
-      }
+      this._startRemoteDragAnimation();
     });
 
     // Export handlers — expose globally and listen for DOM events
@@ -980,6 +991,51 @@ export const LiveFlowHook = {
       const insert = g.querySelector('.lf-edge-insert-wrapper');
       if (insert) { insert.setAttribute('x', midX - 12); insert.setAttribute('y', midY - 12); }
     });
+  },
+
+  // ===== Remote Drag Interpolation =====
+
+  _startRemoteDragAnimation() {
+    if (this._remoteDragAnimating) return;
+    this._remoteDragAnimating = true;
+    this._animateRemoteDrag();
+  },
+
+  _animateRemoteDrag() {
+    if (!this._remoteDragAnimating) return;
+
+    let needsMore = false;
+    const movedIds = new Set();
+    const lerpFactor = 0.4;
+
+    this._remoteDragTargets.forEach((entry, nodeId) => {
+      const dx = entry.targetX - entry.currentX;
+      const dy = entry.targetY - entry.currentY;
+
+      if (Math.abs(dx) > 0.5 || Math.abs(dy) > 0.5) {
+        entry.currentX += dx * lerpFactor;
+        entry.currentY += dy * lerpFactor;
+        needsMore = true;
+      } else {
+        entry.currentX = entry.targetX;
+        entry.currentY = entry.targetY;
+      }
+
+      entry.el.style.left = `${entry.currentX}px`;
+      entry.el.style.top = `${entry.currentY}px`;
+      movedIds.add(nodeId);
+    });
+
+    if (movedIds.size > 0) {
+      this._updateEdgesForNodes(movedIds);
+    }
+
+    if (needsMore) {
+      requestAnimationFrame(() => this._animateRemoteDrag());
+    } else {
+      this._remoteDragAnimating = false;
+      this._remoteDragTargets.clear();
+    }
   },
 
   // ===== Server Communication =====
