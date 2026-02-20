@@ -1,12 +1,14 @@
 /**
  * Node drag manager for LiveFlow
+ *
+ * Drag is fully client-side: CSS left/top are updated directly in the browser
+ * so the interaction feels instant.  Only the final position is sent to the
+ * server (in endDrag) to avoid re-render jitter caused by network latency.
  */
 export class NodeDragManager {
   constructor(hook) {
     this.hook = hook;
     this.draggingNodes = new Map(); // nodeId -> { startMouseX, startMouseY, startPosX, startPosY, element }
-    this.lastPushTime = 0;
-    this.pendingChanges = [];
   }
 
   /**
@@ -51,14 +53,20 @@ export class NodeDragManager {
       if (this.hook.helperLines) {
         this.hook.helperLines.startDrag(new Set(this.draggingNodes.keys()));
       }
-      this.pushDragStart();
+      // Notify server of drag start (for history snapshot) without position —
+      // we send a lightweight event so the server can push history before
+      // positions change, but we do NOT send position data that would trigger
+      // a re-render with stale coordinates.
+      this.hook.pushEvent('lf:drag_start', {
+        node_ids: Array.from(this.draggingNodes.keys())
+      });
       return true;
     }
     return false;
   }
 
   /**
-   * Handle drag movement
+   * Handle drag movement — purely client-side, no server communication.
    */
   moveDrag(event) {
     if (this.draggingNodes.size === 0) return;
@@ -86,9 +94,7 @@ export class NodeDragManager {
       hasHGuide = result.hasHGuide;
     }
 
-    // Pass 3: apply final positions
-    // Guide alignment overrides grid snap per-axis
-    const changes = [];
+    // Pass 3: apply final positions visually (CSS only, no server push)
     this.draggingNodes.forEach((drag, nodeId) => {
       let newX, newY;
 
@@ -118,21 +124,11 @@ export class NodeDragManager {
 
       drag.element.style.left = `${newX}px`;
       drag.element.style.top = `${newY}px`;
-
-      changes.push({
-        type: 'position',
-        id: nodeId,
-        position: { x: newX, y: newY },
-        dragging: true
-      });
     });
-
-    // Throttled sync to server
-    this.throttledPushChanges(changes);
   }
 
   /**
-   * End dragging
+   * End dragging — send final positions to server
    */
   endDrag() {
     if (this.draggingNodes.size === 0) return;
@@ -160,50 +156,11 @@ export class NodeDragManager {
       this.hook.helperLines.endDrag();
     }
 
-    // Final position push
+    // Send final position to server (single push, no intermediate jitter)
     this.hook.pushNodeChange(changes);
-    this.flushPendingChanges();
-  }
-
-  /**
-   * Push drag start event
-   */
-  pushDragStart() {
-    const changes = Array.from(this.draggingNodes.entries()).map(([id, drag]) => ({
-      type: 'position',
-      id,
-      position: { x: drag.startPosX, y: drag.startPosY },
-      dragging: true
-    }));
-    this.hook.pushNodeChange(changes);
-  }
-
-  /**
-   * Throttled push of position changes
-   */
-  throttledPushChanges(changes) {
-    const now = Date.now();
-    if (now - this.lastPushTime > 50) {
-      this.hook.pushNodeChange(changes);
-      this.lastPushTime = now;
-      this.pendingChanges = [];
-    } else {
-      this.pendingChanges = changes;
-    }
-  }
-
-  /**
-   * Flush any pending changes
-   */
-  flushPendingChanges() {
-    if (this.pendingChanges.length > 0) {
-      this.hook.pushNodeChange(this.pendingChanges);
-      this.pendingChanges = [];
-    }
   }
 
   destroy() {
     this.draggingNodes.clear();
-    this.pendingChanges = [];
   }
 }
