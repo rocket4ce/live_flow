@@ -1,19 +1,21 @@
 /**
  * Node drag manager for LiveFlow
  *
- * Drag positions are applied client-side for instant visual feedback.
- * Throttled pushes to the server keep edges in sync.  After each server
- * re-render (DOM patch) we re-apply the latest client-side positions so
- * the nodes never "jump back" due to network latency.
+ * Both node positions AND edge paths are updated client-side during drag
+ * for zero-latency feedback.  Only the final position is pushed to the
+ * server in endDrag().  After each server DOM patch we re-apply the
+ * client-side positions so nodes never "jump back".
  */
+import { calculateBezierPath } from '../utils/paths.js';
+
 export class NodeDragManager {
   constructor(hook) {
     this.hook = hook;
     this.draggingNodes = new Map(); // nodeId -> { startMouseX, startMouseY, startPosX, startPosY, element }
-    this.lastPushTime = 0;
-    this.pendingChanges = [];
     // Track latest client-side positions during drag so we can re-apply after DOM patches
     this.clientPositions = new Map(); // nodeId -> { x, y }
+    // Cache of edges connected to dragging nodes for client-side path updates
+    this.affectedEdges = []; // [{ g, paths, sourceNodeId, targetNodeId, sourceHandlePos, targetHandlePos }]
   }
 
   /**
@@ -37,6 +39,9 @@ export class NodeDragManager {
         el.style.top = `${y}px`;
       }
     });
+
+    // Also re-apply edge paths since the server render may have overwritten them
+    this.updateEdgePaths();
   }
 
   /**
@@ -74,6 +79,9 @@ export class NodeDragManager {
       if (this.hook.helperLines) {
         this.hook.helperLines.startDrag(new Set(this.draggingNodes.keys()));
       }
+      // Cache edges connected to dragging nodes
+      this.cacheAffectedEdges();
+      // Notify server for history snapshot
       this.pushDragStart();
       return true;
     }
@@ -81,7 +89,120 @@ export class NodeDragManager {
   }
 
   /**
-   * Handle drag movement
+   * Cache edges that are connected to any dragging node so we can
+   * update their SVG paths client-side during drag.
+   */
+  cacheAffectedEdges() {
+    this.affectedEdges = [];
+    const draggingIds = new Set(this.draggingNodes.keys());
+    const edgeGroups = this.hook.edgeLayer.querySelectorAll('g[data-edge-id]');
+
+    edgeGroups.forEach(g => {
+      const sourceId = g.dataset.source;
+      const targetId = g.dataset.target;
+      if (!sourceId || !targetId) return;
+
+      // Only process edges connected to at least one dragging node
+      if (!draggingIds.has(sourceId) && !draggingIds.has(targetId)) return;
+
+      // Find the handle positions from the node DOM
+      const sourceHandlePos = this.getHandlePosition(sourceId, g.dataset.sourceHandle, 'source');
+      const targetHandlePos = this.getHandlePosition(targetId, g.dataset.targetHandle, 'target');
+
+      // Collect all <path> elements in this edge group
+      const paths = g.querySelectorAll('path');
+
+      this.affectedEdges.push({
+        g,
+        paths,
+        sourceNodeId: sourceId,
+        targetNodeId: targetId,
+        sourceHandlePos,
+        targetHandlePos,
+        // Cache source/target handle references for label update
+        labelWrapper: g.querySelector('.lf-edge-label-wrapper'),
+        insertWrapper: g.querySelector('.lf-edge-insert-wrapper'),
+        deleteWrapper: g.querySelector('foreignObject:last-of-type'),
+      });
+    });
+  }
+
+  /**
+   * Get the handle position (top/bottom/left/right) for a node.
+   */
+  getHandlePosition(nodeId, handleId, type) {
+    const nodeEl = this.hook.nodeLayer.querySelector(`[data-node-id="${nodeId}"]`);
+    if (!nodeEl) return type === 'source' ? 'right' : 'left';
+
+    if (handleId) {
+      const handleEl = nodeEl.querySelector(`[data-handle-id="${handleId}"]`);
+      if (handleEl) return handleEl.dataset.handlePosition || (type === 'source' ? 'right' : 'left');
+    }
+
+    // Find first handle of matching type
+    const handleEl = nodeEl.querySelector(`[data-handle-type="${type}"]`);
+    if (handleEl) return handleEl.dataset.handlePosition || (type === 'source' ? 'right' : 'left');
+
+    return type === 'source' ? 'right' : 'left';
+  }
+
+  /**
+   * Calculate handle coordinates based on node position and dimensions.
+   */
+  getHandleCoords(nodeId, handlePosition) {
+    const nodeEl = this.hook.nodeLayer.querySelector(`[data-node-id="${nodeId}"]`);
+    if (!nodeEl) return null;
+
+    // Use client positions if available (for dragging nodes), otherwise read from DOM
+    const clientPos = this.clientPositions.get(nodeId);
+    const x = clientPos ? clientPos.x : (parseFloat(nodeEl.style.left) || 0);
+    const y = clientPos ? clientPos.y : (parseFloat(nodeEl.style.top) || 0);
+    const w = nodeEl.offsetWidth || 100;
+    const h = nodeEl.offsetHeight || 40;
+
+    switch (handlePosition) {
+      case 'top':    return { x: x + w / 2, y: y };
+      case 'bottom': return { x: x + w / 2, y: y + h };
+      case 'left':   return { x: x, y: y + h / 2 };
+      case 'right':  return { x: x + w, y: y + h / 2 };
+      default:       return { x: x + w, y: y + h / 2 };
+    }
+  }
+
+  /**
+   * Update SVG paths for all affected edges using current client-side positions.
+   */
+  updateEdgePaths() {
+    for (const edge of this.affectedEdges) {
+      const sourceCoords = this.getHandleCoords(edge.sourceNodeId, edge.sourceHandlePos);
+      const targetCoords = this.getHandleCoords(edge.targetNodeId, edge.targetHandlePos);
+      if (!sourceCoords || !targetCoords) continue;
+
+      const pathD = calculateBezierPath(
+        sourceCoords.x, sourceCoords.y, edge.sourceHandlePos,
+        targetCoords.x, targetCoords.y, edge.targetHandlePos
+      );
+
+      // Update all path elements in this edge group
+      edge.paths.forEach(p => { p.setAttribute('d', pathD); });
+
+      // Update label/insert/delete button positions (midpoint)
+      const midX = (sourceCoords.x + targetCoords.x) / 2;
+      const midY = (sourceCoords.y + targetCoords.y) / 2;
+
+      if (edge.labelWrapper) {
+        edge.labelWrapper.setAttribute('x', midX - 50);
+        edge.labelWrapper.setAttribute('y', midY - 10);
+      }
+      if (edge.insertWrapper) {
+        edge.insertWrapper.setAttribute('x', midX - 12);
+        edge.insertWrapper.setAttribute('y', midY - 12);
+      }
+    }
+  }
+
+  /**
+   * Handle drag movement — node positions + edge paths updated client-side.
    */
   moveDrag(event) {
     if (this.draggingNodes.size === 0) return;
@@ -109,9 +230,7 @@ export class NodeDragManager {
       hasHGuide = result.hasHGuide;
     }
 
-    // Pass 3: apply final positions
-    // Guide alignment overrides grid snap per-axis
-    const changes = [];
+    // Pass 3: apply final positions (CSS only, no server push)
     this.draggingNodes.forEach((drag, nodeId) => {
       let newX, newY;
 
@@ -143,23 +262,16 @@ export class NodeDragManager {
       drag.element.style.left = `${newX}px`;
       drag.element.style.top = `${newY}px`;
 
-      // Track client positions for re-application after DOM patches
+      // Track client positions for edge path calculation and DOM patch recovery
       this.clientPositions.set(nodeId, { x: newX, y: newY });
-
-      changes.push({
-        type: 'position',
-        id: nodeId,
-        position: { x: newX, y: newY },
-        dragging: true
-      });
     });
 
-    // Throttled sync to server (for edge re-rendering)
-    this.throttledPushChanges(changes);
+    // Update edge SVG paths client-side (instant, no server round-trip)
+    this.updateEdgePaths();
   }
 
   /**
-   * End dragging
+   * End dragging — send final positions to server
    */
   endDrag() {
     if (this.draggingNodes.size === 0) return;
@@ -181,17 +293,16 @@ export class NodeDragManager {
     });
 
     this.draggingNodes.clear();
-    // Clear client positions — the final server render is now authoritative
     this.clientPositions.clear();
+    this.affectedEdges = [];
 
     // Clean up helper lines
     if (this.hook.helperLines) {
       this.hook.helperLines.endDrag();
     }
 
-    // Final position push
+    // Send final position to server (single push)
     this.hook.pushNodeChange(changes);
-    this.flushPendingChanges();
   }
 
   /**
@@ -207,34 +318,9 @@ export class NodeDragManager {
     this.hook.pushNodeChange(changes);
   }
 
-  /**
-   * Throttled push of position changes — keeps edges in sync on the server
-   * while avoiding excessive re-renders.
-   */
-  throttledPushChanges(changes) {
-    const now = Date.now();
-    if (now - this.lastPushTime > 80) {
-      this.hook.pushNodeChange(changes);
-      this.lastPushTime = now;
-      this.pendingChanges = [];
-    } else {
-      this.pendingChanges = changes;
-    }
-  }
-
-  /**
-   * Flush any pending changes
-   */
-  flushPendingChanges() {
-    if (this.pendingChanges.length > 0) {
-      this.hook.pushNodeChange(this.pendingChanges);
-      this.pendingChanges = [];
-    }
-  }
-
   destroy() {
     this.draggingNodes.clear();
     this.clientPositions.clear();
-    this.pendingChanges = [];
+    this.affectedEdges = [];
   }
 }

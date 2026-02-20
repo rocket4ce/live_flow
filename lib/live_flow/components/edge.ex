@@ -66,7 +66,14 @@ defmodule LiveFlow.Components.Edge do
       |> assign(:marker_end_id, marker_id(edge.marker_end))
 
     ~H"""
-    <g class={["lf-edge-group", @class, @edge.class]} data-edge-id={@edge.id}>
+    <g
+      class={["lf-edge-group", @class, @edge.class]}
+      data-edge-id={@edge.id}
+      data-source={@edge.source}
+      data-target={@edge.target}
+      data-source-handle={@edge.source_handle}
+      data-target-handle={@edge.target_handle}
+    >
       <%!-- Invisible wider path for easier selection --%>
       <path
         class="lf-edge-interaction"

@@ -4,7 +4,12 @@
 
 ### Performance
 
-- **Jitter-free node dragging on high-latency connections.** Node positions are now applied client-side instantly during drag. Throttled server pushes (every 80ms) keep edges in sync, and after each LiveView DOM patch the client re-applies its current drag positions so nodes never "jump back" to stale server state. No changes required in your LiveView event handlers.
+- **Fully client-side drag with instant edge updates.** Node positions AND edge SVG paths are now recalculated client-side during drag, eliminating all latency. Only the final position is sent to the server when the drag ends. After each LiveView DOM patch, client-side positions and viewport transforms are re-applied so nothing "jumps back" to stale server state. No changes required in your LiveView event handlers.
+- **Viewport stability.** The client-side viewport transform is re-applied after every server DOM patch, preventing zoom/pan jumps when clicking nodes or during selection changes.
+
+### Internal
+
+- Edge `<g>` elements now include `data-source`, `data-target`, `data-source-handle`, and `data-target-handle` attributes for client-side path recalculation during drag.
 
 ## v0.1.0 (2025-xx-xx)
 
