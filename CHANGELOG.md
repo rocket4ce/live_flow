@@ -2,28 +2,9 @@
 
 ## v0.2.0 (2026-02-20)
 
-### Breaking Changes
-
-- **Node drag no longer sends intermediate positions to the server.** Previously, `lf:node_change` events with `dragging: true` were pushed every ~50ms during drag. This caused visible jitter on high-latency connections because the server re-render would overwrite client-side CSS positions. Now, only the final position is sent via `lf:node_change` when the drag ends.
-
-- **New `lf:drag_start` event.** A lightweight `lf:drag_start` event (with `node_ids` payload) is pushed at the beginning of a drag to allow the parent LiveView to snapshot history before positions change. If you use `maybe_push_history_for_drag/3` in your `lf:node_change` handler, replace it with a `lf:drag_start` handler:
-
-  ```elixir
-  # Before (remove this from lf:node_change):
-  # history = Enum.reduce(changes, socket.assigns.history, fn change, acc ->
-  #   maybe_push_history_for_drag(acc, socket.assigns.flow, change)
-  # end)
-
-  # After (add new handler):
-  def handle_event("lf:drag_start", %{"node_ids" => _node_ids}, socket) do
-    history = History.push(socket.assigns.history, socket.assigns.flow)
-    {:noreply, assign(socket, history: history)}
-  end
-  ```
-
 ### Performance
 
-- Drag is now fully client-side with zero server round-trips during movement, eliminating jitter on production deployments with network latency
+- **Jitter-free node dragging on high-latency connections.** Node positions are now applied client-side instantly during drag. Throttled server pushes (every 80ms) keep edges in sync, and after each LiveView DOM patch the client re-applies its current drag positions so nodes never "jump back" to stale server state. No changes required in your LiveView event handlers.
 
 ## v0.1.0 (2025-xx-xx)
 

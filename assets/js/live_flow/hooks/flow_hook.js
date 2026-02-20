@@ -197,6 +197,10 @@ export const LiveFlowHook = {
   updated() {
     // Re-measure container on updates
     this.measureContainer();
+    // Re-apply client-side drag positions after DOM patch to prevent jitter
+    if (this.nodeDrag.isDragging()) {
+      this.nodeDrag.reapplyPositions();
+    }
     // Measure any new or changed nodes
     requestAnimationFrame(() => this.measureNodes());
   },
