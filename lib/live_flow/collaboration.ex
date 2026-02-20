@@ -217,16 +217,23 @@ defmodule LiveFlow.Collaboration do
   """
   @spec handle_info(term(), Phoenix.LiveView.Socket.t()) ::
           {:ok, Phoenix.LiveView.Socket.t()} | :ignore
+  # Safety: skip own messages (broadcast_from should already exclude self)
+  def handle_info({:lf_flow_change, sender_id, _change}, %{assigns: %{lf_user: %{id: sender_id}}}), do: :ignore
+
   def handle_info({:lf_flow_change, _sender_id, change}, socket) do
     flow = apply_remote_change(socket.assigns.flow, change)
     {:ok, Phoenix.Component.assign(socket, flow: flow)}
   end
+
+  def handle_info({:lf_drag_move, sender_id, _changes}, %{assigns: %{lf_user: %{id: sender_id}}}), do: :ignore
 
   def handle_info({:lf_drag_move, _sender_id, changes}, socket) do
     # Push directly to client for DOM-only update (no flow state change, no re-render)
     socket = Phoenix.LiveView.push_event(socket, "lf:remote_drag", %{changes: changes})
     {:ok, socket}
   end
+
+  def handle_info({:lf_cursor_move, sender_id, _cursor}, %{assigns: %{lf_user: %{id: sender_id}}}), do: :ignore
 
   def handle_info({:lf_cursor_move, sender_id, cursor}, socket) do
     socket =
