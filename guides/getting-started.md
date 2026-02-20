@@ -11,7 +11,7 @@ Add `live_flow` to your dependencies in `mix.exs`:
 ```elixir
 defp deps do
   [
-    {:live_flow, "~> 0.1.0"}
+    {:live_flow, "~> 0.2.1"}
   ]
 end
 ```

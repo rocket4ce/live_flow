@@ -1,5 +1,11 @@
 # Changelog
 
+## v0.2.1 (2026-02-20)
+
+### Bug Fixes
+
+- **Fix auto-layout node overlaps.** ELK and tree layout now measure actual DOM node dimensions (`offsetWidth`/`offsetHeight`) before computing positions, instead of relying on server-side dimensions that may still be at default fallback values (150x50). This prevents nodes from overlapping when their rendered size exceeds the defaults.
+
 ## v0.2.0 (2026-02-20)
 
 ### Performance

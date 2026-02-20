@@ -126,7 +126,15 @@ export const LiveFlowHook = {
       if (data.direction) {
         options['elk.direction'] = data.direction;
       }
-      getLayoutedElements(data.nodes, data.edges, options).then(positioned => {
+      // Override server dimensions with actual DOM measurements to prevent overlaps
+      const nodes = data.nodes.map(node => {
+        const el = this.nodeLayer?.querySelector(`[data-node-id="${node.id}"]`);
+        if (el) {
+          return { ...node, width: el.offsetWidth || node.width, height: el.offsetHeight || node.height };
+        }
+        return node;
+      });
+      getLayoutedElements(nodes, data.edges, options).then(positioned => {
         const changes = positioned.map(n => ({
           type: 'position',
           id: n.id,
@@ -141,7 +149,15 @@ export const LiveFlowHook = {
     // Tree layout (pure JS, no ELK)
     this.handleEvent('lf:tree_layout_data', async (data) => {
       const { treeLayout } = await import('../utils/tree_layout.js');
-      const positioned = treeLayout(data.nodes, data.edges, data.options);
+      // Override server dimensions with actual DOM measurements to prevent overlaps
+      const nodes = data.nodes.map(node => {
+        const el = this.nodeLayer?.querySelector(`[data-node-id="${node.id}"]`);
+        if (el) {
+          return { ...node, width: el.offsetWidth || node.width, height: el.offsetHeight || node.height };
+        }
+        return node;
+      });
+      const positioned = treeLayout(nodes, data.edges, data.options);
 
       // Enable CSS transitions on all nodes
       const nodeEls = this.nodeLayer?.querySelectorAll('.lf-node[data-node-id]');
