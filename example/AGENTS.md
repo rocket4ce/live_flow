@@ -1,5 +1,46 @@
 This is a web application written using the Phoenix web framework.
 
+## Skills Disponibles
+
+Este proyecto tiene skills especializadas para ayudar en tareas especificas. **Usa estas skills cuando trabajes en areas relacionadas.**
+
+### Como Usar Skills
+
+Invoca una skill con `/skill-name` cuando necesites conocimiento especializado:
+
+| Skill | Comando | Usar Cuando |
+|-------|---------|-------------|
+| **LiveFlow Debug** | `/liveflow-debug` | Hay errores de eventos, conexiones o rendering en el flow |
+| **LiveFlow Patterns** | `/liveflow-patterns` | Implementas nuevas funcionalidades o disenias arquitectura del flow |
+| **XYFlow Pan/Zoom** | `/xyflow-panzoom` | Implementas navegacion del viewport, zoom, o transformaciones de coordenadas |
+| **XYFlow Drag** | `/xyflow-drag` | Implementas arrastre de nodos, seleccion multiple, snap-to-grid |
+| **XYFlow Edges** | `/xyflow-edges` | Implementas conectores entre nodos, paths SVG (bezier/step/smoothstep) |
+| **XYFlow Connections** | `/xyflow-connections` | Implementas handles, validacion de conexiones, crear nuevas edges |
+| **Skill Authoring** | `/skill-authoring` | Necesitas crear o corregir una skill |
+
+### Cuando Invocar Skills Automaticamente
+
+1. **Error en LiveFlow** → Usa `/liveflow-debug`
+2. **Nuevo feature de flow** → Usa `/liveflow-patterns` + skill especifica (drag/edges/etc)
+3. **Calculos de paths SVG** → Usa `/xyflow-edges`
+4. **Sistema de conexiones** → Usa `/xyflow-connections`
+5. **Crear nueva skill** → Usa `/skill-authoring`
+
+### Archivos de Skills
+
+```
+.claude/skills/
+├── liveflow-debug/SKILL.md
+├── liveflow-patterns/SKILL.md
+├── skill-authoring/SKILL.md
+├── xyflow-connections/SKILL.md
+├── xyflow-drag/SKILL.md
+├── xyflow-edges/SKILL.md
+└── xyflow-panzoom/SKILL.md
+```
+
+---
+
 ## Project guidelines
 
 - Use `mix precommit` alias when you are done with all changes and fix any pending issues
@@ -120,6 +161,18 @@ custom classes must fully style the input
 
 - `Phoenix.View` no longer is needed or included with Phoenix, don't use it
 <!-- phoenix:phoenix-end -->
+
+<!-- phoenix:ecto-start -->
+## Ecto Guidelines
+
+- **Always** preload Ecto associations in queries when they'll be accessed in templates, ie a message that needs to reference the `message.user.email`
+- Remember `import Ecto.Query` and other supporting modules when you write `seeds.exs`
+- `Ecto.Schema` fields always use the `:string` type, even for `:text`, columns, ie: `field :name, :string`
+- `Ecto.Changeset.validate_number/2` **DOES NOT SUPPORT the `:allow_nil` option**. By default, Ecto validations only run if a change for the given field exists and the change value is not nil, so such as option is never needed
+- You **must** use `Ecto.Changeset.get_field(changeset, :field)` to access changeset fields
+- Fields which are set programatically, such as `user_id`, must not be listed in `cast` calls or similar for security purposes. Instead they must be explicitly set when creating the struct
+- **Always** invoke `mix ecto.gen.migration migration_name_using_underscores` when generating migration files, so the correct timestamp and conventions are applied
+<!-- phoenix:ecto-end -->
 
 <!-- phoenix:html-start -->
 ## Phoenix HTML guidelines

@@ -1,22 +1,32 @@
 import Config
 
+# Configure your database
+config :flotas, Flotas.Repo,
+  username: "postgres",
+  password: "postgres",
+  hostname: "localhost",
+  database: "flotas_dev",
+  stacktrace: true,
+  show_sensitive_data_on_connection_error: true,
+  pool_size: 10
+
 # For development, we disable any cache and enable
 # debugging and code reloading.
 #
 # The watchers configuration can be used to run external
 # watchers to your application. For example, we can use it
 # to bundle .js and .css sources.
-config :example, ExampleWeb.Endpoint,
+config :flotas, FlotasWeb.Endpoint,
   # Binding to loopback ipv4 address prevents access from other machines.
   # Change to `ip: {0, 0, 0, 0}` to allow access from other machines.
   http: [ip: {127, 0, 0, 1}],
   check_origin: false,
   code_reloader: true,
   debug_errors: true,
-  secret_key_base: "CD6KOYHxWYyYNtpSLozPhTVYuumerMRF0mEh0e9OTNR+MQ+V2vifGX6S/txpWA4G",
+  secret_key_base: "ZqC+KTo85zP/LJg6ClMFpav3mrrfimmbSCoZz1C/hjCaOa2GTbycnEbWQd5sE4m8",
   watchers: [
-    esbuild: {Esbuild, :install_and_run, [:example, ~w(--sourcemap=inline --watch)]},
-    tailwind: {Tailwind, :install_and_run, [:example, ~w(--watch)]}
+    esbuild: {Esbuild, :install_and_run, [:flotas, ~w(--sourcemap=inline --watch)]},
+    tailwind: {Tailwind, :install_and_run, [:flotas, ~w(--watch)]}
   ]
 
 # ## SSL Support
@@ -43,20 +53,22 @@ config :example, ExampleWeb.Endpoint,
 # different ports.
 
 # Reload browser tabs when matching files change.
-config :example, ExampleWeb.Endpoint,
+config :flotas, FlotasWeb.Endpoint,
   live_reload: [
     web_console_logger: true,
     patterns: [
       # Static assets, except user uploads
       ~r"priv/static/(?!uploads/).*\.(js|css|png|jpeg|jpg|gif|svg)$"E,
+      # Gettext translations
+      ~r"priv/gettext/.*\.po$"E,
       # Router, Controllers, LiveViews and LiveComponents
-      ~r"lib/example_web/router\.ex$"E,
-      ~r"lib/example_web/(controllers|live|components)/.*\.(ex|heex)$"E
+      ~r"lib/flotas_web/router\.ex$"E,
+      ~r"lib/flotas_web/(controllers|live|components)/.*\.(ex|heex)$"E
     ]
   ]
 
 # Enable dev routes for dashboard and mailbox
-config :example, dev_routes: true
+config :flotas, dev_routes: true
 
 # Do not include metadata nor timestamps in development logs
 config :logger, :default_formatter, format: "[$level] $message\n"
@@ -75,3 +87,6 @@ config :phoenix_live_view,
   debug_attributes: true,
   # Enable helpful, but potentially expensive runtime checks
   enable_expensive_runtime_checks: true
+
+# Disable swoosh api client as it is only required for production adapters.
+config :swoosh, :api_client, false

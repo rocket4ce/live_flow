@@ -4,7 +4,7 @@
 @import "tailwindcss" source(none);
 @source "../css";
 @source "../js";
-@source "../../lib/example_web";
+@source "../../lib/flotas_web";
 
 /* A Tailwind plugin that makes "hero-#{ICON}" classes available.
    The heroicons installation itself is managed by your mix.exs */
@@ -13,13 +13,15 @@
 /* daisyUI Tailwind Plugin. You can update this file by fetching the latest version with:
    curl -sLO https://github.com/saadeghi/daisyui/releases/latest/download/daisyui.js
    Make sure to look at the daisyUI changelog: https://daisyui.com/docs/changelog/ */
-@plugin "../vendor/daisyui.cjs";
+@plugin "../vendor/daisyui" {
+  themes: false;
+}
 
 /* daisyUI theme plugin. You can update this file by fetching the latest version with:
   curl -sLO https://github.com/saadeghi/daisyui/releases/latest/download/daisyui-theme.js
   We ship with two themes, a light one inspired on Phoenix colors and a dark one inspired
   on Elixir colors. Build your own at: https://daisyui.com/theme-generator/ */
-@plugin "../vendor/daisyui-theme.cjs" {
+@plugin "../vendor/daisyui-theme" {
   name: "dark";
   default: false;
   prefersdark: true;
@@ -54,7 +56,7 @@
   --noise: 0;
 }
 
-@plugin "../vendor/daisyui-theme.cjs" {
+@plugin "../vendor/daisyui-theme" {
   name: "light";
   default: true;
   prefersdark: false;
@@ -102,5 +104,45 @@
 
 /* This file is for your main application CSS */
 
-/* LiveFlow styles */
-@import "../../../assets/css/live_flow.css";
+/* LiveFlow theme plugin. Define custom themes for the flow diagram library.
+   All 36 built-in themes (12 hand-crafted + 24 auto-generated from daisyUI palettes).
+   Create your own by adding another @plugin block with custom --lf-* variables. */
+@plugin "../vendor/liveflow-theme" { name: "light"; default: true; }
+@plugin "../vendor/liveflow-theme" { name: "dark"; prefersdark: true; }
+@plugin "../vendor/liveflow-theme" { name: "ocean"; }
+@plugin "../vendor/liveflow-theme" { name: "forest"; }
+@plugin "../vendor/liveflow-theme" { name: "sunset"; }
+@plugin "../vendor/liveflow-theme" { name: "synthwave"; }
+@plugin "../vendor/liveflow-theme" { name: "nord"; }
+@plugin "../vendor/liveflow-theme" { name: "autumn"; }
+@plugin "../vendor/liveflow-theme" { name: "cyberpunk"; }
+@plugin "../vendor/liveflow-theme" { name: "pastel"; }
+@plugin "../vendor/liveflow-theme" { name: "dracula"; }
+@plugin "../vendor/liveflow-theme" { name: "coffee"; }
+@plugin "../vendor/liveflow-theme" { name: "acid"; }
+@plugin "../vendor/liveflow-theme" { name: "black"; }
+@plugin "../vendor/liveflow-theme" { name: "luxury"; }
+@plugin "../vendor/liveflow-theme" { name: "retro"; }
+@plugin "../vendor/liveflow-theme" { name: "lofi"; }
+@plugin "../vendor/liveflow-theme" { name: "valentine"; }
+@plugin "../vendor/liveflow-theme" { name: "lemonade"; }
+@plugin "../vendor/liveflow-theme" { name: "garden"; }
+@plugin "../vendor/liveflow-theme" { name: "aqua"; }
+@plugin "../vendor/liveflow-theme" { name: "corporate"; }
+@plugin "../vendor/liveflow-theme" { name: "bumblebee"; }
+@plugin "../vendor/liveflow-theme" { name: "silk"; }
+@plugin "../vendor/liveflow-theme" { name: "dim"; }
+@plugin "../vendor/liveflow-theme" { name: "abyss"; }
+@plugin "../vendor/liveflow-theme" { name: "night"; }
+@plugin "../vendor/liveflow-theme" { name: "caramellatte"; }
+@plugin "../vendor/liveflow-theme" { name: "emerald"; }
+@plugin "../vendor/liveflow-theme" { name: "cupcake"; }
+@plugin "../vendor/liveflow-theme" { name: "cmyk"; }
+@plugin "../vendor/liveflow-theme" { name: "business"; }
+@plugin "../vendor/liveflow-theme" { name: "winter"; }
+@plugin "../vendor/liveflow-theme" { name: "halloween"; }
+@plugin "../vendor/liveflow-theme" { name: "fantasy"; }
+@plugin "../vendor/liveflow-theme" { name: "wireframe"; }
+
+/* LiveFlow - Interactive flow diagram library */
+@import "../../deps/live_flow/assets/css/live_flow.css";

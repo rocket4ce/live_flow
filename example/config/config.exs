@@ -7,24 +7,34 @@
 # General application configuration
 import Config
 
-config :example,
-  generators: [timestamp_type: :utc_datetime]
+config :flotas,
+  ecto_repos: [Flotas.Repo],
+  generators: [timestamp_type: :utc_datetime, binary_id: true]
 
 # Configure the endpoint
-config :example, ExampleWeb.Endpoint,
+config :flotas, FlotasWeb.Endpoint,
   url: [host: "localhost"],
   adapter: Bandit.PhoenixAdapter,
   render_errors: [
-    formats: [html: ExampleWeb.ErrorHTML, json: ExampleWeb.ErrorJSON],
+    formats: [html: FlotasWeb.ErrorHTML, json: FlotasWeb.ErrorJSON],
     layout: false
   ],
-  pubsub_server: Example.PubSub,
-  live_view: [signing_salt: "E4bIIcIo"]
+  pubsub_server: Flotas.PubSub,
+  live_view: [signing_salt: "vc7J85k+"]
+
+# Configure the mailer
+#
+# By default it uses the "Local" adapter which stores the emails
+# locally. You can see the emails in your browser, at "/dev/mailbox".
+#
+# For production it's recommended to configure a different adapter
+# at the `config/runtime.exs`.
+config :flotas, Flotas.Mailer, adapter: Swoosh.Adapters.Local
 
 # Configure esbuild (the version is required)
 config :esbuild,
   version: "0.25.4",
-  example: [
+  flotas: [
     args:
       ~w(js/app.js --bundle --target=es2022 --outdir=../priv/static/assets/js --external:/fonts/* --external:/images/* --alias:@=.),
     cd: Path.expand("../assets", __DIR__),
@@ -34,7 +44,7 @@ config :esbuild,
 # Configure tailwind (the version is required)
 config :tailwind,
   version: "4.1.12",
-  example: [
+  flotas: [
     args: ~w(
       --input=assets/css/app.css
       --output=priv/static/assets/css/app.css
