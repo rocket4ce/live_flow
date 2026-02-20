@@ -1,5 +1,15 @@
 # Changelog
 
+## v0.2.3 (2026-02-20)
+
+### Improvements
+
+- **Clean JavaScript imports.** `package.json` now points directly to source files instead of requiring a build step. Phoenix 1.8+ apps with `NODE_PATH` configured can import with clean paths:
+  ```javascript
+  import { LiveFlowHook, FileImportHook, setupDownloadHandler } from "live_flow"
+  ```
+- **Export `FileImportHook` and `setupDownloadHandler` from main entry.** No longer need a separate import from `hooks/utility_hooks.js`.
+
 ## v0.2.2 (2026-02-20)
 
 ### Performance — Realtime Collaboration

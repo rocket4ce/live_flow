@@ -31,7 +31,7 @@ Add `live_flow` to your dependencies in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:live_flow, "~> 0.2.2"}
+    {:live_flow, "~> 0.2.3"}
   ]
 end
 ```
@@ -41,9 +41,7 @@ end
 In your `assets/js/app.js`, import and register the hook:
 
 ```javascript
-import { LiveFlowHook } from "live_flow"
-// Optional: FileImport hook for JSON import
-import { FileImportHook, setupDownloadHandler } from "live_flow"
+import { LiveFlowHook, FileImportHook, setupDownloadHandler } from "live_flow"
 
 let liveSocket = new LiveSocket("/live", Socket, {
   hooks: {

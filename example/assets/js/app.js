@@ -23,8 +23,7 @@ import "phoenix_html"
 import {Socket} from "phoenix"
 import {LiveSocket} from "phoenix_live_view"
 import {hooks as colocatedHooks} from "phoenix-colocated/example"
-import { LiveFlowHook } from "../../../assets/js/live_flow/index.js"
-import { FileImportHook } from "../../../assets/js/live_flow/hooks/utility_hooks.js"
+import { LiveFlowHook, FileImportHook, setupDownloadHandler } from "live_flow"
 import topbar from "../vendor/topbar"
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
@@ -48,19 +47,8 @@ liveSocket.connect()
 // >> liveSocket.disableLatencySim()
 window.liveSocket = liveSocket
 
-// LiveFlow file download handler
-window.addEventListener("phx:lf:download_file", (event) => {
-  const { filename, content, content_type } = event.detail;
-  const blob = new Blob([content], { type: content_type });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  URL.revokeObjectURL(url);
-});
+// Setup global download handler for export features
+setupDownloadHandler(liveSocket)
 
 // The lines below enable quality of life phoenix_live_reload
 // development features:

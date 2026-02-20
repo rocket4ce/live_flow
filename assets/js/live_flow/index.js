@@ -8,6 +8,9 @@ import { LiveFlowHook } from './hooks/flow_hook.js';
 
 export { LiveFlowHook };
 
+// Export utility hooks for file import/export
+export { FileImportHook, setupDownloadHandler } from './hooks/utility_hooks.js';
+
 // Export individual managers for advanced usage
 export { CoordinateUtils } from './utils/coordinates.js';
 export { PanZoomManager } from './interaction/pan_zoom.js';
