@@ -23,8 +23,8 @@ import "phoenix_html"
 import {Socket} from "phoenix"
 import {LiveSocket} from "phoenix_live_view"
 import {hooks as colocatedHooks} from "phoenix-colocated/example"
-import { LiveFlowHook } from "live_flow"
-import { FileImportHook } from "../../assets/js/live_flow/hooks/utility_hooks.js"
+import { LiveFlowHook } from "../../../assets/js/live_flow/index.js"
+import { FileImportHook } from "../../../assets/js/live_flow/hooks/utility_hooks.js"
 import topbar from "../vendor/topbar"
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
