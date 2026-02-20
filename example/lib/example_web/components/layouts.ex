@@ -20,9 +20,9 @@ defmodule ExampleWeb.Layouts do
 
   ## Examples
 
-      <Layouts.app flash={@flash}>
+      <div>
         <h1>Content</h1>
-      </Layouts.app>
+      </div>
 
   """
   attr :flash, :map, required: true, doc: "the map of flash messages"
