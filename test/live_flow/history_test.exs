@@ -1,7 +1,7 @@
 defmodule LiveFlow.HistoryTest do
   use ExUnit.Case, async: true
 
-  alias LiveFlow.{History, State, Node, Edge}
+  alias LiveFlow.{History, State, Node}
 
   defp make_state(nodes, edges \\ []) do
     State.new(nodes: nodes, edges: edges)
