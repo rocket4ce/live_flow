@@ -11,9 +11,6 @@ defmodule LiveFlow.SerializerTest do
     Edge.new(id, source, target, opts)
   end
 
-  defp make_edge(id, source, target) do
-    Edge.new(id, source, target)
-  end
 
   defp build_flow do
     h1 = Handle.new(:source, :bottom, id: "out")
