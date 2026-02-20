@@ -1,0 +1,1247 @@
+/**
+ * LiveFlow CSS Styles
+ *
+ * All theming is driven by CSS custom properties (--lf-*).
+ * Use the liveflow-theme Tailwind plugin to define custom themes,
+ * or override variables directly on .lf-container.
+ */
+
+/* ===== Default Theme Variables (in @layer base to work with theme plugin) ===== */
+@layer base {
+  .lf-container {
+    /* Canvas */
+    --lf-background: #f8f8f8;
+    --lf-background-dots-color: #ddd;
+    --lf-background-lines-color: #e5e5e5;
+    --lf-background-cross-color: #e5e5e5;
+
+    /* Nodes */
+    --lf-node-bg: white;
+    --lf-node-border: #e2e2e2;
+    --lf-node-border-radius: 8px;
+    --lf-node-shadow: 0 1px 4px 1px rgba(0, 0, 0, 0.08);
+    --lf-node-shadow-hover: 0 2px 8px 2px rgba(0, 0, 0, 0.1);
+    --lf-node-selected-border: #3b82f6;
+    --lf-node-selected-shadow: 0 0 0 2px rgba(59, 130, 246, 0.3);
+
+    /* Edges */
+    --lf-edge-stroke: #b1b1b7;
+    --lf-edge-stroke-width: 2;
+    --lf-edge-stroke-selected: #3b82f6;
+    --lf-edge-stroke-animated: #ff0072;
+
+    /* Handles */
+    --lf-handle-size: 10px;
+    --lf-handle-bg: white;
+    --lf-handle-border: #555;
+    --lf-handle-border-width: 1.5px;
+    --lf-handle-hover-bg: #3b82f6;
+
+    /* Selection */
+    --lf-selection-bg: rgba(59, 130, 246, 0.08);
+    --lf-selection-border: rgba(59, 130, 246, 0.9);
+
+    /* Helper Lines */
+    --lf-helper-line-color: #3b82f6;
+
+    /* Minimap */
+    --lf-minimap-bg: rgba(255, 255, 255, 0.9);
+    --lf-minimap-border: #e2e2e2;
+    --lf-minimap-node-bg: #e2e2e2;
+    --lf-minimap-viewport-border: #3b82f6;
+
+    /* Controls */
+    --lf-controls-bg: white;
+    --lf-controls-border: #e2e2e2;
+    --lf-controls-button-hover: #f5f5f5;
+    --lf-controls-color: #666;
+
+    /* Text & Surfaces */
+    --lf-text-primary: #333;
+    --lf-text-secondary: #666;
+    --lf-text-muted: #888;
+    --lf-surface-secondary: #f9fafb;
+    --lf-border-secondary: #ddd;
+
+    /* Delete buttons */
+    --lf-delete-hover-bg: #fee2e2;
+    --lf-delete-hover-color: #dc2626;
+    --lf-delete-hover-border: #fca5a5;
+  }
+
+  /* Backward compatibility: inherit app dark theme when no explicit lf theme */
+  [data-theme="dark"] .lf-container:not([data-lf-theme]),
+  .dark .lf-container:not([data-lf-theme]) {
+    --lf-background: #1a1a1a;
+    --lf-background-dots-color: #333;
+    --lf-background-lines-color: #2a2a2a;
+    --lf-background-cross-color: #2a2a2a;
+    --lf-node-bg: #2d2d2d;
+    --lf-node-border: #404040;
+    --lf-node-shadow: 0 1px 4px 1px rgba(0, 0, 0, 0.3);
+    --lf-node-shadow-hover: 0 2px 8px 2px rgba(0, 0, 0, 0.4);
+    --lf-edge-stroke: #707070;
+    --lf-handle-bg: #2d2d2d;
+    --lf-handle-border: #888;
+    --lf-minimap-bg: rgba(30, 30, 30, 0.95);
+    --lf-minimap-border: #404040;
+    --lf-minimap-node-bg: #404040;
+    --lf-controls-bg: #2d2d2d;
+    --lf-controls-border: #404040;
+    --lf-controls-button-hover: #383838;
+    --lf-controls-color: #ccc;
+    --lf-text-primary: #eee;
+    --lf-text-secondary: #999;
+    --lf-surface-secondary: #1f2937;
+    --lf-border-secondary: #4b5563;
+    --lf-delete-hover-bg: #7f1d1d;
+    --lf-delete-hover-color: #fca5a5;
+    --lf-delete-hover-border: #dc2626;
+    --lf-helper-line-color: #60a5fa;
+  }
+}
+
+/* ===== Base Container Layout ===== */
+.lf-container {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  overflow: hidden;
+  background: var(--lf-background);
+  touch-action: none;
+  cursor: grab;
+  user-select: none;
+}
+
+.lf-container[data-panning="true"] {
+  cursor: grabbing;
+}
+
+/* ===== Viewport Transform Layer ===== */
+.lf-viewport {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  transform-origin: 0 0;
+  will-change: transform;
+}
+
+/* ===== Edge Layer (SVG) ===== */
+.lf-edges {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  overflow: visible;
+}
+
+.lf-edge-group {
+  pointer-events: visibleStroke;
+}
+
+.lf-edge {
+  fill: none;
+  stroke: var(--lf-edge-stroke);
+  stroke-width: var(--lf-edge-stroke-width);
+  transition: stroke 0.15s ease;
+}
+
+.lf-edge:hover {
+  stroke: var(--lf-edge-stroke-selected);
+}
+
+.lf-edge[data-selected="true"] {
+  stroke: var(--lf-edge-stroke-selected);
+  stroke-width: calc(var(--lf-edge-stroke-width) + 1);
+}
+
+.lf-edge[data-animated="true"] {
+  stroke: var(--lf-edge-stroke-animated);
+  stroke-dasharray: 5;
+  animation: lf-edge-dash 0.5s linear infinite;
+}
+
+@keyframes lf-edge-dash {
+  to {
+    stroke-dashoffset: -10;
+  }
+}
+
+.lf-edge-interaction {
+  fill: none;
+  stroke: transparent;
+  stroke-width: 20;
+  pointer-events: stroke;
+  cursor: pointer;
+}
+
+.lf-connection-line {
+  fill: none;
+  stroke: var(--lf-edge-stroke);
+  stroke-width: var(--lf-edge-stroke-width);
+  stroke-dasharray: 5 5;
+  pointer-events: none;
+}
+
+.lf-edge-label-wrapper {
+  pointer-events: all;
+  overflow: visible;
+}
+
+.lf-edge-label {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--lf-text-primary);
+  background: var(--lf-node-bg);
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--lf-node-border);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+  cursor: text;
+}
+
+.lf-edge-label:hover {
+  border-color: var(--lf-node-selected-border, #3b82f6);
+}
+
+/* ===== Edge Label Editing ===== */
+
+.lf-edge-label-editing {
+  pointer-events: all;
+  overflow: visible;
+}
+
+.lf-edge-label-input {
+  width: 100%;
+  min-width: 60px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--lf-text-primary);
+  background: var(--lf-node-bg);
+  padding: 2px 8px;
+  border-radius: 4px;
+  border: 2px solid var(--lf-node-selected-border, #3b82f6);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+  outline: none;
+  text-align: center;
+  font-family: inherit;
+}
+
+/* ===== Edge Delete Button ===== */
+.lf-edge-delete-wrapper {
+  pointer-events: all;
+  overflow: visible;
+}
+
+.lf-edge-delete-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  background: var(--lf-node-bg);
+  border: 1px solid var(--lf-node-border);
+  border-radius: 50%;
+  cursor: pointer;
+  color: var(--lf-text-muted);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+  transition: background 0.15s ease, color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.lf-edge-delete-btn:hover {
+  background: var(--lf-delete-hover-bg);
+  color: var(--lf-delete-hover-color);
+  border-color: var(--lf-delete-hover-border);
+  transform: scale(1.15);
+  box-shadow: 0 2px 8px rgba(220, 38, 38, 0.2);
+}
+
+/* ===== Node Layer (HTML) ===== */
+.lf-nodes {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 0;
+  height: 0;
+}
+
+.lf-node {
+  position: absolute;
+  background: var(--lf-node-bg);
+  border: 1px solid var(--lf-node-border);
+  border-radius: var(--lf-node-border-radius);
+  box-shadow: var(--lf-node-shadow);
+  cursor: grab;
+  user-select: none;
+  transition: box-shadow 0.15s ease, border-color 0.15s ease;
+}
+
+.lf-node:hover {
+  box-shadow: var(--lf-node-shadow-hover);
+}
+
+.lf-node[data-dragging="true"] {
+  cursor: grabbing;
+  z-index: 1000 !important;
+}
+
+.lf-node[data-selected="true"],
+.lf-node-selected {
+  border-color: var(--lf-node-selected-border);
+  box-shadow: var(--lf-node-shadow), var(--lf-node-selected-shadow);
+}
+
+.lf-node[data-draggable="false"] {
+  cursor: default;
+}
+
+.lf-node-content {
+  padding: 10px 15px;
+  min-width: 100px;
+}
+
+/* Node Delete Button */
+.lf-node-delete-btn {
+  position: absolute;
+  top: -10px;
+  right: -10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  background: var(--lf-node-bg);
+  border: 1px solid var(--lf-node-border);
+  border-radius: 50%;
+  cursor: pointer;
+  color: var(--lf-text-muted);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+  z-index: 20;
+  transition: background 0.15s ease, color 0.15s ease, transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.lf-node-delete-btn:hover {
+  background: var(--lf-delete-hover-bg);
+  color: var(--lf-delete-hover-color);
+  border-color: var(--lf-delete-hover-border);
+  transform: scale(1.15);
+  box-shadow: 0 2px 8px rgba(220, 38, 38, 0.2);
+}
+
+/* Default node styles */
+.lf-default-node {
+  text-align: center;
+}
+
+.lf-default-node-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--lf-text-primary);
+}
+
+/* ===== Handles ===== */
+.lf-handle {
+  position: absolute;
+  width: var(--lf-handle-size);
+  height: var(--lf-handle-size);
+  background: var(--lf-handle-bg);
+  border: var(--lf-handle-border-width) solid var(--lf-handle-border);
+  border-radius: 50%;
+  cursor: crosshair;
+  z-index: 10;
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+
+.lf-handle:hover {
+  transform: scale(1.3);
+  background: var(--lf-handle-hover-bg);
+}
+
+.lf-handle[data-connecting="valid"] {
+  background: var(--lf-handle-hover-bg);
+  transform: scale(1.3);
+}
+
+.lf-handle[data-connecting="invalid"] {
+  background: var(--lf-delete-hover-color, #dc2626);
+  transform: scale(1.3);
+  border-color: var(--lf-delete-hover-color, #dc2626);
+}
+
+/* Handle positions */
+.lf-handle[data-handle-position="top"] {
+  top: calc(-1 * var(--lf-handle-size) / 2 - var(--lf-handle-border-width));
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.lf-handle[data-handle-position="bottom"] {
+  bottom: calc(-1 * var(--lf-handle-size) / 2 - var(--lf-handle-border-width));
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.lf-handle[data-handle-position="left"] {
+  left: calc(-1 * var(--lf-handle-size) / 2 - var(--lf-handle-border-width));
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.lf-handle[data-handle-position="right"] {
+  right: calc(-1 * var(--lf-handle-size) / 2 - var(--lf-handle-border-width));
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.lf-handle[data-handle-position="top"]:hover,
+.lf-handle[data-handle-position="top"][data-connecting],
+.lf-handle[data-handle-position="bottom"]:hover,
+.lf-handle[data-handle-position="bottom"][data-connecting] {
+  transform: translateX(-50%) scale(1.3);
+}
+
+.lf-handle[data-handle-position="left"]:hover,
+.lf-handle[data-handle-position="left"][data-connecting],
+.lf-handle[data-handle-position="right"]:hover,
+.lf-handle[data-handle-position="right"][data-connecting] {
+  transform: translateY(-50%) scale(1.3);
+}
+
+/* ===== Selection Box ===== */
+.lf-selection-box {
+  position: absolute;
+  background: var(--lf-selection-bg);
+  border: 1px dashed var(--lf-selection-border);
+  pointer-events: none;
+  z-index: 1000;
+}
+
+/* ===== Background Patterns ===== */
+.lf-background {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.lf-background-dots {
+  background-image: radial-gradient(
+    circle,
+    var(--lf-background-dots-color) 1px,
+    transparent 1px
+  );
+  background-size: 20px 20px;
+}
+
+.lf-background-lines {
+  background-image:
+    linear-gradient(var(--lf-background-lines-color) 1px, transparent 1px),
+    linear-gradient(90deg, var(--lf-background-lines-color) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+.lf-background-cross {
+  background-image:
+    linear-gradient(var(--lf-background-cross-color) 1px, transparent 1px),
+    linear-gradient(90deg, var(--lf-background-cross-color) 1px, transparent 1px);
+  background-size: 20px 20px;
+}
+
+/* ===== Minimap ===== */
+.lf-minimap {
+  position: absolute;
+  bottom: 16px;
+  right: 16px;
+  width: 200px;
+  height: 150px;
+  background: var(--lf-minimap-bg);
+  border: 1px solid var(--lf-minimap-border);
+  border-radius: 4px;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  z-index: 5;
+}
+
+.lf-minimap-nodes {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transform-origin: 0 0;
+}
+
+.lf-minimap-node {
+  position: absolute;
+  background: var(--lf-minimap-node-bg);
+  border-radius: 2px;
+}
+
+.lf-minimap-node[data-selected="true"] {
+  background: var(--lf-node-selected-border);
+}
+
+.lf-minimap-viewport {
+  position: absolute;
+  border: 2px solid var(--lf-minimap-viewport-border);
+  background: rgba(59, 130, 246, 0.05);
+}
+
+/* ===== Controls ===== */
+.lf-controls {
+  position: absolute;
+  bottom: 16px;
+  left: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: var(--lf-controls-bg);
+  border: 1px solid var(--lf-controls-border);
+  border-radius: 4px;
+  padding: 4px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  z-index: 5;
+}
+
+.lf-controls-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+  color: var(--lf-controls-color);
+}
+
+.lf-controls-button:hover {
+  background: var(--lf-controls-button-hover);
+}
+
+.lf-controls-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* ===== Panel Positions ===== */
+.lf-panel {
+  position: absolute;
+  z-index: 5;
+}
+
+.lf-panel[data-position="top-left"] {
+  top: 16px;
+  left: 16px;
+}
+
+.lf-panel[data-position="top-right"] {
+  top: 16px;
+  right: 16px;
+}
+
+.lf-panel[data-position="bottom-left"] {
+  bottom: 16px;
+  left: 16px;
+}
+
+.lf-panel[data-position="bottom-right"] {
+  bottom: 16px;
+  right: 16px;
+}
+
+.lf-panel[data-position="top-center"] {
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.lf-panel[data-position="bottom-center"] {
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+/* ===== Custom Node Types ===== */
+
+/* --- Form Node --- */
+.lf-form-node {
+  min-width: 220px;
+}
+
+.lf-form-node-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  color: white;
+  font-weight: 600;
+  font-size: 13px;
+  border-radius: var(--lf-node-border-radius) var(--lf-node-border-radius) 0 0;
+  margin: -10px -15px 0;
+}
+
+.lf-form-node-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 0 2px;
+}
+
+.lf-form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.lf-form-field-label {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--lf-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.lf-form-field input,
+.lf-form-field select,
+.lf-form-field textarea {
+  padding: 4px 8px;
+  font-size: 13px;
+  border: 1px solid var(--lf-border-secondary);
+  border-radius: 4px;
+  background: var(--lf-surface-secondary);
+  color: var(--lf-text-primary);
+  outline: none;
+  cursor: text;
+  user-select: text;
+}
+
+.lf-form-field input:focus,
+.lf-form-field select:focus,
+.lf-form-field textarea:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.15);
+}
+
+.lf-form-field select {
+  cursor: pointer;
+}
+
+/* --- Condition Node --- */
+.lf-condition-node {
+  min-width: 180px;
+}
+
+.lf-condition-node-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  color: white;
+  font-weight: 600;
+  font-size: 13px;
+  border-radius: var(--lf-node-border-radius) var(--lf-node-border-radius) 0 0;
+  margin: -10px -15px 0;
+}
+
+.lf-condition-node-body {
+  padding: 10px 0 2px;
+}
+
+.lf-condition-node-expression {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--lf-text-primary);
+  font-family: monospace;
+  padding: 4px 0;
+}
+
+.lf-condition-node-desc {
+  font-size: 12px;
+  color: var(--lf-text-muted);
+  margin-top: 2px;
+}
+
+.lf-condition-node-branches {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 8px;
+  padding-top: 6px;
+  border-top: 1px solid var(--lf-border-secondary);
+}
+
+.lf-condition-branch-yes {
+  font-size: 11px;
+  font-weight: 600;
+  color: #22c55e;
+}
+
+.lf-condition-branch-no {
+  font-size: 11px;
+  font-weight: 600;
+  color: #ef4444;
+}
+
+/* --- Action Node --- */
+.lf-action-node {
+  min-width: 200px;
+}
+
+.lf-action-node-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  color: white;
+  font-weight: 600;
+  font-size: 13px;
+  border-radius: var(--lf-node-border-radius) var(--lf-node-border-radius) 0 0;
+  margin: -10px -15px 0;
+}
+
+.lf-action-node-body {
+  padding: 10px 0 2px;
+}
+
+.lf-action-node-type {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--lf-text-muted);
+  font-family: monospace;
+}
+
+.lf-action-node-params {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--lf-border-secondary);
+}
+
+.lf-action-node-param {
+  display: flex;
+  gap: 4px;
+  font-size: 12px;
+}
+
+.lf-action-param-key {
+  color: var(--lf-text-muted);
+  font-weight: 500;
+}
+
+.lf-action-param-val {
+  color: var(--lf-text-primary);
+  font-family: monospace;
+  font-size: 11px;
+}
+
+/* ===== Remote Cursors (Realtime Collaboration) ===== */
+.lf-remote-cursor {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  z-index: 1000;
+  transition: transform 0.1s ease-out;
+  will-change: transform;
+}
+
+.lf-remote-cursor svg {
+  display: block;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.3));
+}
+
+.lf-remote-cursor-label {
+  position: absolute;
+  left: 16px;
+  top: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  color: white;
+  padding: 1px 6px;
+  border-radius: 3px;
+  white-space: nowrap;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+/* ===== Pipeline Node Styles ===== */
+.pipeline-node {
+  min-width: 180px;
+  border-radius: 8px;
+  border: 2px solid var(--lf-node-border);
+  background: var(--lf-node-bg);
+  overflow: hidden;
+  font-size: 13px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.08);
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.pipeline-node-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  color: white;
+  font-weight: 600;
+  font-size: 12px;
+}
+
+.pipeline-node-body {
+  padding: 8px 10px;
+}
+
+.pipeline-node-preview {
+  font-size: 11px;
+  background: var(--lf-surface-secondary);
+  padding: 4px 6px;
+  border-radius: 4px;
+  margin: 0;
+  max-height: 60px;
+  overflow: hidden;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.pipeline-node-code {
+  display: block;
+  font-size: 11px;
+  background: var(--lf-surface-secondary);
+  padding: 4px 6px;
+  border-radius: 4px;
+  color: #7c3aed;
+  word-break: break-all;
+}
+
+.pipeline-node-config {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+}
+
+.pipeline-method-badge {
+  background: #3b82f6;
+  color: white;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-weight: 700;
+  font-size: 10px;
+}
+
+.pipeline-url-text {
+  color: #64748b;
+  word-break: break-all;
+}
+
+.pipeline-node-meta {
+  margin-top: 4px;
+  font-size: 10px;
+  color: #94a3b8;
+}
+
+.pipeline-node-output {
+  font-size: 11px;
+  background: var(--lf-surface-secondary);
+  padding: 4px 6px;
+  border-radius: 4px;
+  margin: 0;
+  max-height: 60px;
+  overflow: hidden;
+  white-space: pre-wrap;
+  word-break: break-all;
+  color: #94a3b8;
+}
+
+.pipeline-node-output.has-data {
+  color: var(--lf-text-primary);
+}
+
+/* Status badges */
+.pipeline-status-badge {
+  margin-left: auto;
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.pipeline-status-badge.running {
+  background: rgba(255, 255, 255, 0.3);
+  animation: pipeline-pulse 1.5s infinite;
+}
+
+.pipeline-status-badge.success {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.pipeline-status-badge.error {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+/* Node status borders */
+.pipeline-node-running {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
+  animation: pipeline-border-pulse 1.5s infinite;
+}
+
+.pipeline-node-success {
+  border-color: #22c55e;
+  box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.15);
+}
+
+.pipeline-node-error {
+  border-color: #ef4444;
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.15);
+}
+
+/* Condition node */
+.pipeline-condition-labels {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 6px;
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.pipeline-condition-true {
+  color: #22c55e;
+}
+
+.pipeline-condition-false {
+  color: #ef4444;
+}
+
+.pipeline-branch-indicator {
+  margin-top: 4px;
+}
+
+.pipeline-branch-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 8px;
+  border-radius: 3px;
+}
+
+.pipeline-branch-badge.true {
+  background: #dcfce7;
+  color: #16a34a;
+}
+
+.pipeline-branch-badge.false {
+  background: #fef2f2;
+  color: #dc2626;
+}
+
+/* Animations */
+@keyframes pipeline-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+@keyframes pipeline-border-pulse {
+  0%, 100% { box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2); }
+  50% { box-shadow: 0 0 0 5px rgba(59, 130, 246, 0.1); }
+}
+
+/* Pipeline edge animations */
+.pipeline-edge-flowing .lf-edge {
+  stroke: #3b82f6 !important;
+  stroke-width: 2.5;
+  stroke-dasharray: 8 4;
+  animation: pipeline-flow 0.6s linear infinite;
+  filter: drop-shadow(0 0 3px rgba(59, 130, 246, 0.4));
+}
+
+.pipeline-edge-completed .lf-edge {
+  stroke: #22c55e !important;
+  stroke-width: 2.5;
+  stroke-dasharray: none;
+  animation: none;
+  transition: stroke 0.3s ease;
+  filter: drop-shadow(0 0 2px rgba(34, 197, 94, 0.3));
+}
+
+.pipeline-edge-inactive .lf-edge {
+  stroke: #94a3b8 !important;
+  stroke-width: 1.5;
+  opacity: 0.4;
+  animation: none;
+}
+
+@keyframes pipeline-flow {
+  to {
+    stroke-dashoffset: -24;
+  }
+}
+
+/* ===== Helper Lines (Alignment Guides) ===== */
+
+.lf-helper-lines-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  overflow: visible;
+  z-index: 2;
+}
+
+.lf-helper-line {
+  stroke: var(--lf-helper-line-color, #3b82f6);
+  stroke-dasharray: 4 3;
+  pointer-events: none;
+  opacity: 0.8;
+}
+
+/* ===== Remote Cursor Overlay (Collaboration) ===== */
+
+.lf-cursor-overlay {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 50;
+  overflow: hidden;
+}
+
+.lf-remote-cursor {
+  position: absolute;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  transition: transform 0.1s ease-out;
+  z-index: 51;
+}
+
+.lf-remote-cursor-label {
+  position: absolute;
+  left: 16px;
+  top: 12px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 11px;
+  color: white;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+/* ===== Keyboard Shortcuts Panel ===== */
+
+.lf-shortcuts-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(2px);
+}
+
+.lf-shortcuts-panel {
+  background: var(--lf-node-bg, white);
+  border: 1px solid var(--lf-node-border, #e2e2e2);
+  border-radius: 12px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
+  max-width: 420px;
+  width: 90%;
+  max-height: 80vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.lf-shortcuts-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--lf-node-border, #e2e2e2);
+}
+
+.lf-shortcuts-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--lf-text-primary, #1a1a1a);
+}
+
+.lf-shortcuts-close {
+  background: none;
+  border: none;
+  font-size: 22px;
+  cursor: pointer;
+  color: var(--lf-text-muted, #888);
+  padding: 0 4px;
+  line-height: 1;
+}
+
+.lf-shortcuts-close:hover {
+  color: var(--lf-text-primary, #1a1a1a);
+}
+
+.lf-shortcuts-body {
+  padding: 12px 20px 20px;
+  overflow-y: auto;
+}
+
+.lf-shortcuts-section {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--lf-text-muted, #888);
+  margin-top: 14px;
+  margin-bottom: 6px;
+}
+
+.lf-shortcuts-section:first-child {
+  margin-top: 4px;
+}
+
+.lf-shortcuts-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 5px 0;
+}
+
+.lf-shortcuts-keys {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.lf-shortcuts-keys kbd {
+  display: inline-block;
+  padding: 2px 7px;
+  font-size: 12px;
+  font-family: inherit;
+  background: var(--lf-background, #f8f8f8);
+  border: 1px solid var(--lf-node-border, #e2e2e2);
+  border-radius: 4px;
+  color: var(--lf-text-primary, #1a1a1a);
+  min-width: 24px;
+  text-align: center;
+}
+
+.lf-shortcuts-desc {
+  font-size: 13px;
+  color: var(--lf-text-primary, #1a1a1a);
+}
+
+/* ===== Layout Animation (auto-layout transitions) ===== */
+
+.lf-node[data-layout-animating="true"] {
+  transition: left 0.4s cubic-bezier(0.4, 0, 0.2, 1),
+              top 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ===== Edge Insert "+" Button ===== */
+
+.lf-edge-insert-wrapper {
+  overflow: visible;
+}
+
+.lf-edge-insert-btn {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--lf-node-bg, white);
+  border: 2px solid var(--lf-edge-stroke);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.2s, background 0.15s, border-color 0.15s;
+  color: var(--lf-edge-stroke);
+  pointer-events: all;
+}
+
+.lf-edge-group:hover .lf-edge-insert-btn {
+  opacity: 1;
+}
+
+.lf-edge-insert-btn:hover {
+  background: var(--lf-node-selected-border, #3b82f6);
+  border-color: var(--lf-node-selected-border, #3b82f6);
+  color: white;
+}
+
+/* ===== Touch/Mobile Optimizations ===== */
+
+@media (pointer: coarse) {
+  /* Larger handles on touch devices */
+  .lf-container {
+    --lf-handle-size: 14px;
+  }
+
+  /* Larger edge interaction area */
+  .lf-edge-interaction {
+    stroke-width: 30px !important;
+  }
+
+  /* Larger edge delete button */
+  .lf-edge-delete-btn {
+    width: 32px;
+    height: 32px;
+  }
+
+  .lf-edge-delete-wrapper {
+    width: 32px;
+    height: 32px;
+  }
+
+  /* Larger controls buttons */
+  .lf-controls-btn {
+    width: 36px;
+    height: 36px;
+    font-size: 18px;
+  }
+
+  /* Prevent text selection during touch interactions */
+  .lf-container * {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* Edge label needs bigger tap target */
+  .lf-edge-label {
+    padding: 4px 12px;
+    font-size: 13px;
+  }
+}
+
+/* ===== Shape Nodes ===== */
+
+.lf-node.shape-node,
+.lf-node.shape-node:hover,
+.lf-node.shape-node[data-selected="true"],
+.lf-node.shape-node.lf-node-selected {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  border-radius: 0;
+}
+
+.lf-node.shape-node .lf-node-content {
+  padding: 0;
+  min-width: auto;
+}
+
+.lf-node.shape-node .lf-node-delete-btn {
+  top: -6px;
+  right: -6px;
+}

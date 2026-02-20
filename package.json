@@ -1,0 +1,34 @@
+{
+  "name": "live_flow",
+  "version": "0.1.0",
+  "description": "Interactive node-based flow diagrams for Phoenix LiveView",
+  "license": "MIT",
+  "type": "module",
+  "module": "./priv/static/live_flow.esm.js",
+  "exports": {
+    ".": {
+      "import": "./priv/static/live_flow.esm.js"
+    },
+    "./css/live_flow.css": "./priv/static/live_flow.css",
+    "./liveflow-theme": "./priv/static/liveflow-theme.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/rocket4ce/live_flow"
+  },
+  "files": [
+    "README.md",
+    "LICENSE.md",
+    "package.json",
+    "priv/static/*",
+    "assets/js/**",
+    "assets/css/**"
+  ],
+  "devDependencies": {
+    "esbuild": "^0.24.0"
+  },
+  "scripts": {
+    "build": "node assets/js/build.mjs",
+    "build:watch": "node assets/js/build.mjs --watch"
+  }
+}
