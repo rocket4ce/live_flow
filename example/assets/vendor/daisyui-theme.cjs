@@ -37,7 +37,8 @@ var exports_theme = {};
 __export(exports_theme, {
   default: () => theme_default
 });
-module.exports = __toCommonJS(exports_theme);
+var _mod = __toCommonJS(exports_theme);
+module.exports = _mod.default || _mod;
 
 // packages/daisyui/functions/plugin.js
 var plugin = {
