@@ -62,10 +62,16 @@ defmodule ExampleWeb.FlowDynamicLayoutLive do
               Fit View
             </button>
             <div class="divider divider-horizontal mx-1"></div>
-            <button class="btn btn-sm btn-outline" phx-click={JS.dispatch("lf:export-svg", to: "#dynamic-layout-flow")}>
+            <button
+              class="btn btn-sm btn-outline"
+              phx-click={JS.dispatch("lf:export-svg", to: "#dynamic-layout-flow")}
+            >
               SVG
             </button>
-            <button class="btn btn-sm btn-outline" phx-click={JS.dispatch("lf:export-png", to: "#dynamic-layout-flow")}>
+            <button
+              class="btn btn-sm btn-outline"
+              phx-click={JS.dispatch("lf:export-png", to: "#dynamic-layout-flow")}
+            >
               PNG
             </button>
           </div>
@@ -173,16 +179,17 @@ defmodule ExampleWeb.FlowDynamicLayoutLive do
     parent = State.get_node(socket.assigns.flow, parent_id)
     initial_pos = child_position(parent, socket.assigns.direction)
 
-    child = Node.new("tree-#{n}", initial_pos,
-      %{label: "Node #{n}", subtitle: "child", color: color},
-      type: :tree_node,
-      handles: [Handle.target(:top), Handle.source(:bottom)]
-    )
+    child =
+      Node.new("tree-#{n}", initial_pos, %{label: "Node #{n}", subtitle: "child", color: color},
+        type: :tree_node,
+        handles: [Handle.target(:top), Handle.source(:bottom)]
+      )
 
-    edge = Edge.new("e-#{n}", parent_id, child.id,
-      marker_end: %{type: :arrow},
-      data: %{insertable: true}
-    )
+    edge =
+      Edge.new("e-#{n}", parent_id, child.id,
+        marker_end: %{type: :arrow},
+        data: %{insertable: true}
+      )
 
     history = History.push(socket.assigns.history, socket.assigns.flow)
     flow = socket.assigns.flow |> State.add_node(child) |> State.add_edge(edge)
@@ -204,23 +211,26 @@ defmodule ExampleWeb.FlowDynamicLayoutLive do
         colors = ["#3b82f6", "#8b5cf6", "#ec4899", "#f59e0b", "#10b981", "#6366f1"]
         color = Enum.random(colors)
 
-        updated_node = %{node |
-          type: :tree_node,
-          data: %{label: "Node #{n}", subtitle: "converted", color: color},
-          handles: [Handle.target(:top), Handle.source(:bottom)]
+        updated_node = %{
+          node
+          | type: :tree_node,
+            data: %{label: "Node #{n}", subtitle: "converted", color: color},
+            handles: [Handle.target(:top), Handle.source(:bottom)]
         }
 
         # Add a placeholder child below the converted node
-        placeholder = Node.new("ph-#{n}", child_position(node, socket.assigns.direction), %{},
-          type: :placeholder,
-          handles: [Handle.target(:top)],
-          draggable: false
-        )
+        placeholder =
+          Node.new("ph-#{n}", child_position(node, socket.assigns.direction), %{},
+            type: :placeholder,
+            handles: [Handle.target(:top)],
+            draggable: false
+          )
 
-        ph_edge = Edge.new("e-ph-#{n}", node_id, placeholder.id,
-          marker_end: %{type: :arrow},
-          data: %{insertable: true}
-        )
+        ph_edge =
+          Edge.new("e-ph-#{n}", node_id, placeholder.id,
+            marker_end: %{type: :arrow},
+            data: %{insertable: true}
+          )
 
         history = History.push(socket.assigns.history, socket.assigns.flow)
 
@@ -250,22 +260,27 @@ defmodule ExampleWeb.FlowDynamicLayoutLive do
 
         initial_pos = midpoint_position(socket.assigns.flow, edge)
 
-        new_node = Node.new("tree-#{n}", initial_pos,
-          %{label: "Node #{n}", subtitle: "inserted", color: color},
-          type: :tree_node,
-          handles: [Handle.target(:top), Handle.source(:bottom)]
-        )
+        new_node =
+          Node.new(
+            "tree-#{n}",
+            initial_pos,
+            %{label: "Node #{n}", subtitle: "inserted", color: color},
+            type: :tree_node,
+            handles: [Handle.target(:top), Handle.source(:bottom)]
+          )
 
         # Remove old edge, create two new edges
-        edge_to_new = Edge.new("e-#{n}a", edge.source, new_node.id,
-          marker_end: %{type: :arrow},
-          data: %{insertable: true}
-        )
+        edge_to_new =
+          Edge.new("e-#{n}a", edge.source, new_node.id,
+            marker_end: %{type: :arrow},
+            data: %{insertable: true}
+          )
 
-        edge_from_new = Edge.new("e-#{n}b", new_node.id, edge.target,
-          marker_end: %{type: :arrow},
-          data: %{insertable: true}
-        )
+        edge_from_new =
+          Edge.new("e-#{n}b", new_node.id, edge.target,
+            marker_end: %{type: :arrow},
+            data: %{insertable: true}
+          )
 
         history = History.push(socket.assigns.history, socket.assigns.flow)
 
@@ -291,11 +306,14 @@ defmodule ExampleWeb.FlowDynamicLayoutLive do
 
     initial_pos = new_root_position(socket.assigns.flow)
 
-    node = Node.new("tree-#{n}", initial_pos,
-      %{label: "Root #{n}", subtitle: "root node", color: color},
-      type: :tree_node,
-      handles: [Handle.target(:top), Handle.source(:bottom)]
-    )
+    node =
+      Node.new(
+        "tree-#{n}",
+        initial_pos,
+        %{label: "Root #{n}", subtitle: "root node", color: color},
+        type: :tree_node,
+        handles: [Handle.target(:top), Handle.source(:bottom)]
+      )
 
     history = History.push(socket.assigns.history, socket.assigns.flow)
     flow = State.add_node(socket.assigns.flow, node)
@@ -327,7 +345,12 @@ defmodule ExampleWeb.FlowDynamicLayoutLive do
 
     {:noreply,
      socket
-     |> assign(flow: flow, history: History.new(), clipboard: Clipboard.new(), auto_layout_pending: true)
+     |> assign(
+       flow: flow,
+       history: History.new(),
+       clipboard: Clipboard.new(),
+       auto_layout_pending: true
+     )
      |> trigger_auto_layout()}
   end
 
@@ -556,9 +579,15 @@ defmodule ExampleWeb.FlowDynamicLayoutLive do
     target = State.get_node(flow, edge.target)
 
     case {source, target} do
-      {nil, nil} -> %{x: 0, y: 0}
-      {nil, t} -> %{x: t.position.x, y: t.position.y}
-      {s, nil} -> %{x: s.position.x, y: s.position.y}
+      {nil, nil} ->
+        %{x: 0, y: 0}
+
+      {nil, t} ->
+        %{x: t.position.x, y: t.position.y}
+
+      {s, nil} ->
+        %{x: s.position.x, y: s.position.y}
+
       {s, t} ->
         %{
           x: (s.position.x + t.position.x) / 2,
@@ -591,10 +620,12 @@ defmodule ExampleWeb.FlowDynamicLayoutLive do
   end
 
   defp trigger_auto_layout(socket) do
-    data = Layout.prepare_tree_layout_data(
-      socket.assigns.flow,
-      %{"direction" => socket.assigns.direction}
-    )
+    data =
+      Layout.prepare_tree_layout_data(
+        socket.assigns.flow,
+        %{"direction" => socket.assigns.direction}
+      )
+
     push_event(socket, "lf:tree_layout_data", data)
   end
 
@@ -626,7 +657,13 @@ defmodule ExampleWeb.FlowDynamicLayoutLive do
         flow
 
       node ->
-        updated = %{node | width: Map.get(change, "width"), height: Map.get(change, "height"), measured: true}
+        updated = %{
+          node
+          | width: Map.get(change, "width"),
+            height: Map.get(change, "height"),
+            measured: true
+        }
+
         %{flow | nodes: Map.put(flow.nodes, id, updated)}
     end
   end
@@ -658,45 +695,49 @@ defmodule ExampleWeb.FlowDynamicLayoutLive do
   defp create_initial_tree do
     nodes = [
       # Root
-      Node.new("project", %{x: 0, y: 0},
-        %{label: "Project", subtitle: "root", color: "#6366f1"},
+      Node.new("project", %{x: 0, y: 0}, %{label: "Project", subtitle: "root", color: "#6366f1"},
         type: :tree_node,
         handles: [Handle.source(:bottom)]
       ),
       # Level 1
-      Node.new("design", %{x: 0, y: 0},
-        %{label: "Design", subtitle: "team", color: "#ec4899"},
+      Node.new("design", %{x: 0, y: 0}, %{label: "Design", subtitle: "team", color: "#ec4899"},
         type: :tree_node,
         handles: [Handle.target(:top), Handle.source(:bottom)]
       ),
-      Node.new("engineering", %{x: 0, y: 0},
+      Node.new(
+        "engineering",
+        %{x: 0, y: 0},
         %{label: "Engineering", subtitle: "team", color: "#3b82f6"},
         type: :tree_node,
         handles: [Handle.target(:top), Handle.source(:bottom)]
       ),
-      Node.new("marketing", %{x: 0, y: 0},
+      Node.new(
+        "marketing",
+        %{x: 0, y: 0},
         %{label: "Marketing", subtitle: "team", color: "#f59e0b"},
         type: :tree_node,
         handles: [Handle.target(:top), Handle.source(:bottom)]
       ),
       # Level 2
-      Node.new("ux-ui", %{x: 0, y: 0},
-        %{label: "UX/UI", subtitle: "design", color: "#ec4899"},
+      Node.new("ux-ui", %{x: 0, y: 0}, %{label: "UX/UI", subtitle: "design", color: "#ec4899"},
         type: :tree_node,
         handles: [Handle.target(:top), Handle.source(:bottom)]
       ),
-      Node.new("frontend", %{x: 0, y: 0},
+      Node.new(
+        "frontend",
+        %{x: 0, y: 0},
         %{label: "Frontend", subtitle: "engineering", color: "#3b82f6"},
         type: :tree_node,
         handles: [Handle.target(:top), Handle.source(:bottom)]
       ),
-      Node.new("backend", %{x: 0, y: 0},
+      Node.new(
+        "backend",
+        %{x: 0, y: 0},
         %{label: "Backend", subtitle: "engineering", color: "#3b82f6"},
         type: :tree_node,
         handles: [Handle.target(:top), Handle.source(:bottom)]
       ),
-      Node.new("seo", %{x: 0, y: 0},
-        %{label: "SEO", subtitle: "marketing", color: "#f59e0b"},
+      Node.new("seo", %{x: 0, y: 0}, %{label: "SEO", subtitle: "marketing", color: "#f59e0b"},
         type: :tree_node,
         handles: [Handle.target(:top), Handle.source(:bottom)]
       ),
@@ -711,23 +752,39 @@ defmodule ExampleWeb.FlowDynamicLayoutLive do
     edges = [
       # Level 0 -> 1
       Edge.new("e-proj-design", "project", "design",
-        marker_end: %{type: :arrow}, data: %{insertable: true}),
+        marker_end: %{type: :arrow},
+        data: %{insertable: true}
+      ),
       Edge.new("e-proj-eng", "project", "engineering",
-        marker_end: %{type: :arrow}, data: %{insertable: true}),
+        marker_end: %{type: :arrow},
+        data: %{insertable: true}
+      ),
       Edge.new("e-proj-mkt", "project", "marketing",
-        marker_end: %{type: :arrow}, data: %{insertable: true}),
+        marker_end: %{type: :arrow},
+        data: %{insertable: true}
+      ),
       # Level 1 -> 2
       Edge.new("e-design-ux", "design", "ux-ui",
-        marker_end: %{type: :arrow}, data: %{insertable: true}),
+        marker_end: %{type: :arrow},
+        data: %{insertable: true}
+      ),
       Edge.new("e-eng-front", "engineering", "frontend",
-        marker_end: %{type: :arrow}, data: %{insertable: true}),
+        marker_end: %{type: :arrow},
+        data: %{insertable: true}
+      ),
       Edge.new("e-eng-back", "engineering", "backend",
-        marker_end: %{type: :arrow}, data: %{insertable: true}),
+        marker_end: %{type: :arrow},
+        data: %{insertable: true}
+      ),
       Edge.new("e-mkt-seo", "marketing", "seo",
-        marker_end: %{type: :arrow}, data: %{insertable: true}),
+        marker_end: %{type: :arrow},
+        data: %{insertable: true}
+      ),
       # Placeholder
       Edge.new("e-seo-ph", "seo", "ph-seo",
-        marker_end: %{type: :arrow}, data: %{insertable: true})
+        marker_end: %{type: :arrow},
+        data: %{insertable: true}
+      )
     ]
 
     State.new(nodes: nodes, edges: edges)

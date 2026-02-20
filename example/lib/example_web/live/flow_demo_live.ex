@@ -43,7 +43,10 @@ defmodule ExampleWeb.FlowDemoLive do
             <button class="btn btn-sm" phx-click="fit_view">
               Fit View
             </button>
-            <button class="btn btn-sm btn-accent" phx-click={JS.dispatch("lf:auto-layout", to: "#demo-flow")}>
+            <button
+              class="btn btn-sm btn-accent"
+              phx-click={JS.dispatch("lf:auto-layout", to: "#demo-flow")}
+            >
               Auto Layout
             </button>
             <div class="divider divider-horizontal mx-1"></div>
@@ -63,10 +66,16 @@ defmodule ExampleWeb.FlowDemoLive do
               class="hidden"
               phx-hook="FileImport"
             />
-            <button class="btn btn-sm btn-outline" phx-click={JS.dispatch("lf:export-svg", to: "#demo-flow")}>
+            <button
+              class="btn btn-sm btn-outline"
+              phx-click={JS.dispatch("lf:export-svg", to: "#demo-flow")}
+            >
               SVG
             </button>
-            <button class="btn btn-sm btn-outline" phx-click={JS.dispatch("lf:export-png", to: "#demo-flow")}>
+            <button
+              class="btn btn-sm btn-outline"
+              phx-click={JS.dispatch("lf:export-png", to: "#demo-flow")}
+            >
               PNG
             </button>
             <div class="divider divider-horizontal mx-1"></div>
@@ -74,7 +83,14 @@ defmodule ExampleWeb.FlowDemoLive do
               <label class="text-sm font-medium">Theme:</label>
               <select class="select select-sm select-bordered w-40" name="theme">
                 <option value="" selected={@lf_theme == nil}>auto</option>
-                <option :for={t <- ~w(light dark ocean forest sunset synthwave nord autumn cyberpunk pastel dracula coffee acid black luxury retro lofi valentine lemonade garden aqua corporate bumblebee silk dim abyss night caramellatte emerald cupcake cmyk business winter halloween fantasy wireframe)} value={t} selected={@lf_theme == t}>
+                <option
+                  :for={
+                    t <-
+                      ~w(light dark ocean forest sunset synthwave nord autumn cyberpunk pastel dracula coffee acid black luxury retro lofi valentine lemonade garden aqua corporate bumblebee silk dim abyss night caramellatte emerald cupcake cmyk business winter halloween fantasy wireframe)
+                  }
+                  value={t}
+                  selected={@lf_theme == t}
+                >
                   {t}
                 </option>
               </select>
@@ -168,7 +184,13 @@ defmodule ExampleWeb.FlowDemoLive do
   @impl true
   def handle_event("export_json", _params, socket) do
     json = Serializer.to_json(socket.assigns.flow)
-    {:noreply, push_event(socket, "lf:download_file", %{content: json, filename: "flow.json", type: "application/json"})}
+
+    {:noreply,
+     push_event(socket, "lf:download_file", %{
+       content: json,
+       filename: "flow.json",
+       type: "application/json"
+     })}
   end
 
   @impl true

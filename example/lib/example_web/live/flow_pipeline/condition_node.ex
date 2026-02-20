@@ -26,7 +26,15 @@ defmodule ExampleWeb.FlowPipeline.ConditionNode do
     ~H"""
     <div class={"pipeline-node pipeline-condition-node pipeline-node-#{@status}"}>
       <div class="pipeline-node-header" style="background: #ec4899">
-        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+        >
           <path d="M16 3h5v5M4 20L21 3M21 16v5h-5M15 15l6 6M4 4l5 5" />
         </svg>
         <span>{@label}</span>

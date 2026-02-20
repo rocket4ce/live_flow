@@ -43,7 +43,10 @@ defmodule ExampleWeb.FlowFormsLive do
             <button class="btn btn-sm" phx-click="fit_view">
               Fit View
             </button>
-            <button class="btn btn-sm btn-accent" phx-click={JS.dispatch("lf:auto-layout", to: "#forms-flow")}>
+            <button
+              class="btn btn-sm btn-accent"
+              phx-click={JS.dispatch("lf:auto-layout", to: "#forms-flow")}
+            >
               Auto Layout
             </button>
           </div>

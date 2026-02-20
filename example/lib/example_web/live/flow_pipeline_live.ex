@@ -52,7 +52,13 @@ defmodule ExampleWeb.FlowPipelineLive do
                 class="btn btn-sm btn-success"
                 phx-click="run_pipeline"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                >
                   <polygon points="5 3 19 12 5 21 5 3" />
                 </svg>
                 Run Pipeline
@@ -70,7 +76,10 @@ defmodule ExampleWeb.FlowPipelineLive do
               <button class="btn btn-sm" phx-click="fit_view">
                 Fit View
               </button>
-              <button class="btn btn-sm btn-accent" phx-click={JS.dispatch("lf:auto-layout", to: "#pipeline-flow")}>
+              <button
+                class="btn btn-sm btn-accent"
+                phx-click={JS.dispatch("lf:auto-layout", to: "#pipeline-flow")}
+              >
                 Auto Layout
               </button>
               <.pipeline_status_badge status={@pipeline_status} total_time={@total_time} />
@@ -381,7 +390,8 @@ defmodule ExampleWeb.FlowPipelineLive do
       status: :success,
       output: output,
       duration_ms: duration_ms,
-      input: get_node_input_from_statuses(node_id, socket.assigns.flow, socket.assigns.node_statuses)
+      input:
+        get_node_input_from_statuses(node_id, socket.assigns.flow, socket.assigns.node_statuses)
     }
 
     status_entry =
@@ -419,7 +429,8 @@ defmodule ExampleWeb.FlowPipelineLive do
       Map.put(socket.assigns.node_statuses, node_id, %{
         status: :error,
         error: reason,
-        input: get_node_input_from_statuses(node_id, socket.assigns.flow, socket.assigns.node_statuses)
+        input:
+          get_node_input_from_statuses(node_id, socket.assigns.flow, socket.assigns.node_statuses)
       })
 
     flow =
@@ -559,7 +570,12 @@ defmodule ExampleWeb.FlowPipelineLive do
                   Map.put(acc, id, %{edge | class: class, style: %{}, animated: false})
 
                 edge.source_handle == "false-out" ->
-                  Map.put(acc, id, %{edge | class: "pipeline-edge-inactive", style: %{}, animated: false})
+                  Map.put(acc, id, %{
+                    edge
+                    | class: "pipeline-edge-inactive",
+                      style: %{},
+                      animated: false
+                  })
 
                 true ->
                   Map.put(acc, id, %{edge | class: class, style: %{}, animated: false})
@@ -571,7 +587,12 @@ defmodule ExampleWeb.FlowPipelineLive do
                   Map.put(acc, id, %{edge | class: class, style: %{}, animated: false})
 
                 edge.source_handle == "true-out" ->
-                  Map.put(acc, id, %{edge | class: "pipeline-edge-inactive", style: %{}, animated: false})
+                  Map.put(acc, id, %{
+                    edge
+                    | class: "pipeline-edge-inactive",
+                      style: %{},
+                      animated: false
+                  })
 
                 true ->
                   Map.put(acc, id, %{edge | class: class, style: %{}, animated: false})
@@ -621,32 +642,44 @@ defmodule ExampleWeb.FlowPipelineLive do
 
   defp create_demo_pipeline do
     nodes = [
-      Node.new("start-1", %{x: 50, y: 200}, %{
-        label: "Start",
-        payload: %{"city" => "London", "units" => "metric"}
-      },
+      Node.new(
+        "start-1",
+        %{x: 50, y: 200},
+        %{
+          label: "Start",
+          payload: %{"city" => "London", "units" => "metric"}
+        },
         type: :start,
         handles: [Handle.source(:right)]
       ),
-      Node.new("http-1", %{x: 300, y: 200}, %{
-        label: "HTTP Request",
-        method: "GET",
-        url: "https://wttr.in/{{city}}?format=j1"
-      },
+      Node.new(
+        "http-1",
+        %{x: 300, y: 200},
+        %{
+          label: "HTTP Request",
+          method: "GET",
+          url: "https://wttr.in/{{city}}?format=j1"
+        },
         type: :http,
         handles: [Handle.target(:left), Handle.source(:right)]
       ),
-      Node.new("transform-1", %{x: 560, y: 200}, %{
-        label: "Extract Temp",
-        expression: ~s|get_in(data, ["current_condition", Access.at(0), "temp_C"])|
-      },
+      Node.new(
+        "transform-1",
+        %{x: 560, y: 200},
+        %{
+          label: "Extract Temp",
+          expression: ~s|get_in(data, ["current_condition", Access.at(0), "temp_C"])|
+        },
         type: :transform,
         handles: [Handle.target(:left), Handle.source(:right)]
       ),
-      Node.new("condition-1", %{x: 820, y: 200}, %{
-        label: "Warm?",
-        expression: "String.to_integer(data) > 15"
-      },
+      Node.new(
+        "condition-1",
+        %{x: 820, y: 200},
+        %{
+          label: "Warm?",
+          expression: "String.to_integer(data) > 15"
+        },
         type: :condition,
         handles: [
           Handle.target(:left),
@@ -654,24 +687,28 @@ defmodule ExampleWeb.FlowPipelineLive do
           Handle.source(:bottom, id: "false-out")
         ]
       ),
-      Node.new("log-warm", %{x: 1100, y: 150}, %{
-        label: "Warm Day!"
-      },
+      Node.new(
+        "log-warm",
+        %{x: 1100, y: 150},
+        %{
+          label: "Warm Day!"
+        },
         type: :log,
         handles: [Handle.target(:left)]
       ),
-      Node.new("log-cold", %{x: 1100, y: 350}, %{
-        label: "Cold Day!"
-      },
+      Node.new(
+        "log-cold",
+        %{x: 1100, y: 350},
+        %{
+          label: "Cold Day!"
+        },
         type: :log,
         handles: [Handle.target(:left)]
       )
     ]
 
     edges = [
-      Edge.new("e1", "start-1", "http-1",
-        marker_end: %{type: :arrow_closed, color: "#64748b"}
-      ),
+      Edge.new("e1", "start-1", "http-1", marker_end: %{type: :arrow_closed, color: "#64748b"}),
       Edge.new("e2", "http-1", "transform-1",
         marker_end: %{type: :arrow_closed, color: "#64748b"}
       ),

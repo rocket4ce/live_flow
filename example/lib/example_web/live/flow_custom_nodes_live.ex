@@ -60,7 +60,10 @@ defmodule ExampleWeb.FlowCustomNodesLive do
             <button class="btn btn-sm" phx-click="fit_view">
               Fit View
             </button>
-            <button class="btn btn-sm btn-info" phx-click={JS.dispatch("lf:auto-layout", to: "#custom-nodes-flow")}>
+            <button
+              class="btn btn-sm btn-info"
+              phx-click={JS.dispatch("lf:auto-layout", to: "#custom-nodes-flow")}
+            >
               Auto Layout
             </button>
             <div class="divider divider-horizontal mx-1"></div>
@@ -80,10 +83,16 @@ defmodule ExampleWeb.FlowCustomNodesLive do
               class="hidden"
               phx-hook="FileImport"
             />
-            <button class="btn btn-sm btn-outline" phx-click={JS.dispatch("lf:export-svg", to: "#custom-nodes-flow")}>
+            <button
+              class="btn btn-sm btn-outline"
+              phx-click={JS.dispatch("lf:export-svg", to: "#custom-nodes-flow")}
+            >
               SVG
             </button>
-            <button class="btn btn-sm btn-outline" phx-click={JS.dispatch("lf:export-png", to: "#custom-nodes-flow")}>
+            <button
+              class="btn btn-sm btn-outline"
+              phx-click={JS.dispatch("lf:export-png", to: "#custom-nodes-flow")}
+            >
               PNG
             </button>
             <div class="divider divider-horizontal mx-1"></div>
@@ -131,7 +140,8 @@ defmodule ExampleWeb.FlowCustomNodesLive do
           <div class="text-sm">
             <span class="font-medium">Nodes:</span> {map_size(@flow.nodes)} |
             <span class="font-medium">Edges:</span> {map_size(@flow.edges)} |
-            <span class="font-medium">Types:</span> card, metric, status, header, default |
+            <span class="font-medium">Types:</span>
+            card, metric, status, header, default |
             <span class="font-medium">Undo:</span> {History.undo_count(@history)} |
             <span class="font-medium">Redo:</span> {History.redo_count(@history)} |
             <span class="font-medium">Clipboard:</span> {Clipboard.node_count(@clipboard)}
@@ -209,7 +219,10 @@ defmodule ExampleWeb.FlowCustomNodesLive do
         {@label}
       </div>
       <div style="font-size: 28px; font-weight: 800; color: var(--lf-text-primary); margin: 4px 0">
-        {@value}<span :if={@unit != ""} style="font-size: 14px; font-weight: 400; color: var(--lf-text-muted)">
+        {@value}<span
+          :if={@unit != ""}
+          style="font-size: 14px; font-weight: 400; color: var(--lf-text-muted)"
+        >
           {@unit}
         </span>
       </div>
@@ -244,7 +257,10 @@ defmodule ExampleWeb.FlowCustomNodesLive do
     ~H"""
     <div style="min-width: 150px">
       <div style="display: flex; align-items: center; gap: 8px">
-        <div style={"width: 10px; height: 10px; border-radius: 50%; background: #{@status_color}; box-shadow: 0 0 6px #{@status_color}80"}}>
+        <div
+          style={"width: 10px; height: 10px; border-radius: 50%; background: #{@status_color}; box-shadow: 0 0 6px #{@status_color}80"}
+          }
+        >
         </div>
         <div>
           <div style="font-weight: 600; font-size: 13px; color: var(--lf-text-primary)">
@@ -279,7 +295,10 @@ defmodule ExampleWeb.FlowCustomNodesLive do
     ~H"""
     <div style={"min-width: 180px; background: #{@color}; margin: -10px -15px; padding: 12px 16px; border-radius: var(--lf-node-border-radius)"}>
       <div style="font-size: 16px; font-weight: 700; color: white">{@label}</div>
-      <div :if={@subtitle != ""} style="font-size: 12px; color: rgba(255,255,255,0.8); margin-top: 2px">
+      <div
+        :if={@subtitle != ""}
+        style="font-size: 12px; color: rgba(255,255,255,0.8); margin-top: 2px"
+      >
         {@subtitle}
       </div>
     </div>
@@ -293,7 +312,9 @@ defmodule ExampleWeb.FlowCustomNodesLive do
     n = map_size(socket.assigns.flow.nodes) + 1
 
     node =
-      Node.new("card-#{n}", %{x: 100 + rem(n, 4) * 200, y: 100 + div(n, 4) * 120},
+      Node.new(
+        "card-#{n}",
+        %{x: 100 + rem(n, 4) * 200, y: 100 + div(n, 4) * 120},
         %{label: "Card #{n}", description: "A new card node", color: "#3b82f6"},
         type: :card,
         handles: [Handle.target(:left), Handle.source(:right)]
@@ -309,8 +330,16 @@ defmodule ExampleWeb.FlowCustomNodesLive do
     n = map_size(socket.assigns.flow.nodes) + 1
 
     node =
-      Node.new("metric-#{n}", %{x: 100 + rem(n, 4) * 200, y: 100 + div(n, 4) * 120},
-        %{label: "Metric #{n}", value: "#{:rand.uniform(999)}", unit: "ms", trend: :up, change: "12%"},
+      Node.new(
+        "metric-#{n}",
+        %{x: 100 + rem(n, 4) * 200, y: 100 + div(n, 4) * 120},
+        %{
+          label: "Metric #{n}",
+          value: "#{:rand.uniform(999)}",
+          unit: "ms",
+          trend: :up,
+          change: "12%"
+        },
         type: :metric,
         handles: [Handle.target(:left), Handle.source(:right)]
       )
@@ -326,7 +355,9 @@ defmodule ExampleWeb.FlowCustomNodesLive do
     statuses = [:active, :warning, :error, :idle]
 
     node =
-      Node.new("status-#{n}", %{x: 100 + rem(n, 4) * 200, y: 100 + div(n, 4) * 120},
+      Node.new(
+        "status-#{n}",
+        %{x: 100 + rem(n, 4) * 200, y: 100 + div(n, 4) * 120},
         %{label: "Service #{n}", status: Enum.random(statuses), detail: "port 443"},
         type: :status,
         handles: [Handle.target(:left), Handle.source(:right)]
@@ -339,13 +370,20 @@ defmodule ExampleWeb.FlowCustomNodesLive do
 
   @impl true
   def handle_event("reset_flow", _params, socket) do
-    {:noreply, assign(socket, flow: create_demo_flow(), history: History.new(), clipboard: Clipboard.new())}
+    {:noreply,
+     assign(socket, flow: create_demo_flow(), history: History.new(), clipboard: Clipboard.new())}
   end
 
   @impl true
   def handle_event("export_json", _params, socket) do
     json = Serializer.to_json(socket.assigns.flow)
-    {:noreply, push_event(socket, "lf:download_file", %{content: json, filename: "flow.json", type: "application/json"})}
+
+    {:noreply,
+     push_event(socket, "lf:download_file", %{
+       content: json,
+       filename: "flow.json",
+       type: "application/json"
+     })}
   end
 
   @impl true
@@ -567,7 +605,13 @@ defmodule ExampleWeb.FlowCustomNodesLive do
         flow
 
       node ->
-        updated = %{node | width: Map.get(change, "width"), height: Map.get(change, "height"), measured: true}
+        updated = %{
+          node
+          | width: Map.get(change, "width"),
+            height: Map.get(change, "height"),
+            measured: true
+        }
+
         %{flow | nodes: Map.put(flow.nodes, id, updated)}
     end
   end
@@ -599,53 +643,74 @@ defmodule ExampleWeb.FlowCustomNodesLive do
   defp create_demo_flow do
     nodes = [
       # Header node (function component)
-      Node.new("header-1", %{x: 50, y: 20},
+      Node.new(
+        "header-1",
+        %{x: 50, y: 20},
         %{label: "Data Pipeline", subtitle: "Real-time ETL", color: "#6366f1"},
         type: :header,
         handles: [Handle.source(:bottom)]
       ),
 
       # Card nodes (function component)
-      Node.new("card-1", %{x: 30, y: 160},
-        %{label: "API Gateway", description: "Receives incoming webhook events and validates payload schema", icon: "~", color: "#3b82f6"},
+      Node.new(
+        "card-1",
+        %{x: 30, y: 160},
+        %{
+          label: "API Gateway",
+          description: "Receives incoming webhook events and validates payload schema",
+          icon: "~",
+          color: "#3b82f6"
+        },
         type: :card,
         handles: [Handle.target(:top), Handle.source(:right)]
       ),
-      Node.new("card-2", %{x: 30, y: 340},
-        %{label: "Message Queue", description: "Buffers events for downstream processing", icon: "~", color: "#8b5cf6"},
+      Node.new(
+        "card-2",
+        %{x: 30, y: 340},
+        %{
+          label: "Message Queue",
+          description: "Buffers events for downstream processing",
+          icon: "~",
+          color: "#8b5cf6"
+        },
         type: :card,
         handles: [Handle.target(:top), Handle.source(:right)]
       ),
 
       # Metric nodes (function component)
-      Node.new("metric-1", %{x: 340, y: 140},
+      Node.new(
+        "metric-1",
+        %{x: 340, y: 140},
         %{label: "Throughput", value: "1,247", unit: "/s", trend: :up, change: "12%"},
         type: :metric,
         handles: [Handle.target(:left), Handle.source(:right)]
       ),
-      Node.new("metric-2", %{x: 340, y: 320},
+      Node.new(
+        "metric-2",
+        %{x: 340, y: 320},
         %{label: "Latency", value: "23", unit: "ms", trend: :down, change: "8%"},
         type: :metric,
         handles: [Handle.target(:left), Handle.source(:right)]
       ),
 
       # Status nodes (function component)
-      Node.new("status-1", %{x: 600, y: 140},
+      Node.new(
+        "status-1",
+        %{x: 600, y: 140},
         %{label: "Database", status: :active, detail: "PostgreSQL 16 - 3 replicas"},
         type: :status,
         handles: [Handle.target(:left), Handle.source(:right)]
       ),
-      Node.new("status-2", %{x: 600, y: 320},
+      Node.new(
+        "status-2",
+        %{x: 600, y: 320},
         %{label: "Cache Layer", status: :warning, detail: "Redis - 87% memory"},
         type: :status,
         handles: [Handle.target(:left)]
       ),
 
       # Default node (no custom type — uses built-in)
-      Node.new("output", %{x: 870, y: 220},
-        %{label: "Output"},
-        handles: [Handle.target(:left)]
-      )
+      Node.new("output", %{x: 870, y: 220}, %{label: "Output"}, handles: [Handle.target(:left)])
     ]
 
     edges = [
@@ -653,25 +718,15 @@ defmodule ExampleWeb.FlowCustomNodesLive do
         style: %{"stroke" => "#6366f1"},
         marker_end: %{type: :arrow, color: "#6366f1"}
       ),
-      Edge.new("e2", "card-1", "metric-1",
-        marker_end: %{type: :arrow}
-      ),
+      Edge.new("e2", "card-1", "metric-1", marker_end: %{type: :arrow}),
       Edge.new("e3", "card-1", "card-2",
         style: %{"stroke" => "#8b5cf6"},
         marker_end: %{type: :arrow, color: "#8b5cf6"}
       ),
-      Edge.new("e4", "card-2", "metric-2",
-        marker_end: %{type: :arrow}
-      ),
-      Edge.new("e5", "metric-1", "status-1",
-        marker_end: %{type: :arrow}
-      ),
-      Edge.new("e6", "metric-2", "status-2",
-        marker_end: %{type: :arrow}
-      ),
-      Edge.new("e7", "status-1", "output",
-        marker_end: %{type: :arrow}
-      )
+      Edge.new("e4", "card-2", "metric-2", marker_end: %{type: :arrow}),
+      Edge.new("e5", "metric-1", "status-1", marker_end: %{type: :arrow}),
+      Edge.new("e6", "metric-2", "status-2", marker_end: %{type: :arrow}),
+      Edge.new("e7", "status-1", "output", marker_end: %{type: :arrow})
     ]
 
     State.new(nodes: nodes, edges: edges)

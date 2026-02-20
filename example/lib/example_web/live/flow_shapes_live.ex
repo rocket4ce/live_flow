@@ -79,8 +79,10 @@ defmodule ExampleWeb.FlowShapesLive do
 
   defp sidebar(assigns) do
     ~H"""
-    <div class="absolute top-4 left-4 z-10 bg-base-100/90 backdrop-blur-sm border border-base-300 rounded-xl p-3 shadow-lg"
-         style="width: 200px">
+    <div
+      class="absolute top-4 left-4 z-10 bg-base-100/90 backdrop-blur-sm border border-base-300 rounded-xl p-3 shadow-lg"
+      style="width: 200px"
+    >
       <p class="text-xs font-medium text-base-content/70 mb-2">Drag shapes to the canvas</p>
       <div class="grid grid-cols-4 gap-1.5">
         <button
@@ -171,8 +173,12 @@ defmodule ExampleWeb.FlowShapesLive do
   defp shape_path(%{shape: "round-rectangle"} = assigns) do
     ~H"""
     <rect
-      x="1" y="1" width={@w - 2} height={@h - 2}
-      rx="12" ry="12"
+      x="1"
+      y="1"
+      width={@w - 2}
+      height={@h - 2}
+      rx="12"
+      ry="12"
       fill={@color}
       stroke={if(@selected, do: "rgba(0,0,0,0.4)", else: "none")}
       stroke-width={if(@selected, do: "2", else: "0")}
@@ -183,8 +189,10 @@ defmodule ExampleWeb.FlowShapesLive do
   defp shape_path(%{shape: "circle"} = assigns) do
     ~H"""
     <ellipse
-      cx={div(@w, 2)} cy={div(@h, 2)}
-      rx={div(@w, 2) - 1} ry={div(@h, 2) - 1}
+      cx={div(@w, 2)}
+      cy={div(@h, 2)}
+      rx={div(@w, 2) - 1}
+      ry={div(@h, 2) - 1}
       fill={@color}
       stroke={if(@selected, do: "rgba(0,0,0,0.4)", else: "none")}
       stroke-width={if(@selected, do: "2", else: "0")}
@@ -195,7 +203,9 @@ defmodule ExampleWeb.FlowShapesLive do
   defp shape_path(%{shape: "diamond"} = assigns) do
     cx = div(assigns.w, 2)
     cy = div(assigns.h, 2)
-    assigns = assign(assigns, :points, "#{cx},2 #{assigns.w - 2},#{cy} #{cx},#{assigns.h - 2} 2,#{cy}")
+
+    assigns =
+      assign(assigns, :points, "#{cx},2 #{assigns.w - 2},#{cy} #{cx},#{assigns.h - 2} 2,#{cy}")
 
     ~H"""
     <polygon
@@ -213,7 +223,11 @@ defmodule ExampleWeb.FlowShapesLive do
     inset = round(w * 0.2)
 
     assigns =
-      assign(assigns, :points, "#{inset},1 #{w - inset},1 #{w - 1},#{div(h, 2)} #{w - inset},#{h - 1} #{inset},#{h - 1} 1,#{div(h, 2)}")
+      assign(
+        assigns,
+        :points,
+        "#{inset},1 #{w - inset},1 #{w - 1},#{div(h, 2)} #{w - inset},#{h - 1} #{inset},#{h - 1} 1,#{div(h, 2)}"
+      )
 
     ~H"""
     <polygon
@@ -229,7 +243,13 @@ defmodule ExampleWeb.FlowShapesLive do
     w = assigns.w
     h = assigns.h
     tip = round(w * 0.2)
-    assigns = assign(assigns, :points, "1,1 #{w - tip},1 #{w - 1},#{div(h, 2)} #{w - tip},#{h - 1} 1,#{h - 1}")
+
+    assigns =
+      assign(
+        assigns,
+        :points,
+        "1,1 #{w - tip},1 #{w - 1},#{div(h, 2)} #{w - tip},#{h - 1} 1,#{h - 1}"
+      )
 
     ~H"""
     <polygon
@@ -255,7 +275,10 @@ defmodule ExampleWeb.FlowShapesLive do
   defp shape_path(%{shape: "rectangle"} = assigns) do
     ~H"""
     <rect
-      x="1" y="1" width={@w - 2} height={@h - 2}
+      x="1"
+      y="1"
+      width={@w - 2}
+      height={@h - 2}
       fill={@color}
       stroke={if(@selected, do: "rgba(0,0,0,0.4)", else: "none")}
       stroke-width={if(@selected, do: "2", else: "0")}
@@ -319,8 +342,12 @@ defmodule ExampleWeb.FlowShapesLive do
   defp shape_path(assigns) do
     ~H"""
     <rect
-      x="1" y="1" width={@w - 2} height={@h - 2}
-      rx="4" ry="4"
+      x="1"
+      y="1"
+      width={@w - 2}
+      height={@h - 2}
+      rx="4"
+      ry="4"
       fill={@color}
       stroke={if(@selected, do: "rgba(0,0,0,0.4)", else: "none")}
       stroke-width={if(@selected, do: "2", else: "0")}
@@ -343,7 +370,17 @@ defmodule ExampleWeb.FlowShapesLive do
   defp sidebar_shape(%{shape: "round-rectangle"} = assigns) do
     ~H"""
     <svg width="28" height="28" viewBox="0 0 28 28">
-      <rect x="2" y="6" width="24" height="16" rx="5" ry="5" fill="none" stroke="#888" stroke-width="1.5" />
+      <rect
+        x="2"
+        y="6"
+        width="24"
+        height="16"
+        rx="5"
+        ry="5"
+        fill="none"
+        stroke="#888"
+        stroke-width="1.5"
+      />
     </svg>
     """
   end
@@ -410,7 +447,12 @@ defmodule ExampleWeb.FlowShapesLive do
   defp sidebar_shape(%{shape: "plus"} = assigns) do
     ~H"""
     <svg width="28" height="28" viewBox="0 0 28 28">
-      <polygon points="10,3 18,3 18,10 25,10 25,18 18,18 18,25 10,25 10,18 3,18 3,10 10,10" fill="none" stroke="#888" stroke-width="1.5" />
+      <polygon
+        points="10,3 18,3 18,10 25,10 25,18 18,18 18,25 10,25 10,18 3,18 3,10 10,10"
+        fill="none"
+        stroke="#888"
+        stroke-width="1.5"
+      />
     </svg>
     """
   end
@@ -418,7 +460,17 @@ defmodule ExampleWeb.FlowShapesLive do
   defp sidebar_shape(assigns) do
     ~H"""
     <svg width="28" height="28" viewBox="0 0 28 28">
-      <rect x="3" y="5" width="22" height="18" rx="3" ry="3" fill="none" stroke="#888" stroke-width="1.5" />
+      <rect
+        x="3"
+        y="5"
+        width="22"
+        height="18"
+        rx="3"
+        ry="3"
+        fill="none"
+        stroke="#888"
+        stroke-width="1.5"
+      />
     </svg>
     """
   end
@@ -460,7 +512,9 @@ defmodule ExampleWeb.FlowShapesLive do
     color = Enum.random(@colors)
 
     node =
-      Node.new("shape-#{n}", %{x: 300 + rem(n, 5) * 50, y: 200 + rem(n, 3) * 50},
+      Node.new(
+        "shape-#{n}",
+        %{x: 300 + rem(n, 5) * 50, y: 200 + rem(n, 3) * 50},
         %{shape: shape_type, label: shape_type, color: color},
         type: :shape,
         class: "shape-node",
@@ -739,13 +793,17 @@ defmodule ExampleWeb.FlowShapesLive do
 
   defp create_demo_flow do
     nodes = [
-      Node.new("round-rect", %{x: 370, y: 30},
+      Node.new(
+        "round-rect",
+        %{x: 370, y: 30},
         %{shape: "round-rectangle", label: "round-rectangle", color: "#4A90D9"},
         type: :shape,
         class: "shape-node",
         handles: [Handle.source(:bottom, id: "s")]
       ),
-      Node.new("diamond", %{x: 415, y: 140},
+      Node.new(
+        "diamond",
+        %{x: 415, y: 140},
         %{shape: "diamond", label: "diamond", color: "#E8A838"},
         type: :shape,
         class: "shape-node",
@@ -756,19 +814,22 @@ defmodule ExampleWeb.FlowShapesLive do
           Handle.source(:bottom, id: "s-bottom")
         ]
       ),
-      Node.new("circle", %{x: 255, y: 165},
-        %{shape: "circle", label: "circle", color: "#6A9B5A"},
+      Node.new("circle", %{x: 255, y: 165}, %{shape: "circle", label: "circle", color: "#6A9B5A"},
         type: :shape,
         class: "shape-node",
         handles: [Handle.target(:right, id: "t")]
       ),
-      Node.new("hexagon", %{x: 600, y: 165},
+      Node.new(
+        "hexagon",
+        %{x: 600, y: 165},
         %{shape: "hexagon", label: "hexagon", color: "#C05555"},
         type: :shape,
         class: "shape-node",
         handles: [Handle.target(:left, id: "t"), Handle.source(:right, id: "s")]
       ),
-      Node.new("arrow-rect", %{x: 130, y: 340},
+      Node.new(
+        "arrow-rect",
+        %{x: 130, y: 340},
         %{shape: "arrow-rectangle", label: "arrow-rectangle", color: "#7B68AE"},
         type: :shape,
         class: "shape-node",
@@ -778,7 +839,9 @@ defmodule ExampleWeb.FlowShapesLive do
           Handle.source(:bottom, id: "s-bottom")
         ]
       ),
-      Node.new("cylinder", %{x: 400, y: 320},
+      Node.new(
+        "cylinder",
+        %{x: 400, y: 320},
         %{shape: "cylinder", label: "cylinder", color: "#D4A840"},
         type: :shape,
         class: "shape-node",
@@ -788,25 +851,30 @@ defmodule ExampleWeb.FlowShapesLive do
           Handle.source(:bottom, id: "s-bottom")
         ]
       ),
-      Node.new("rectangle", %{x: 790, y: 280},
+      Node.new(
+        "rectangle",
+        %{x: 790, y: 280},
         %{shape: "rectangle", label: "rectangle", color: "#4A8050"},
         type: :shape,
         class: "shape-node",
         handles: [Handle.target(:left, id: "t"), Handle.source(:bottom, id: "s")]
       ),
-      Node.new("parallelogram", %{x: 580, y: 440},
+      Node.new(
+        "parallelogram",
+        %{x: 580, y: 440},
         %{shape: "parallelogram", label: "parallelogram", color: "#7B68AE"},
         type: :shape,
         class: "shape-node",
         handles: [Handle.target(:left, id: "t-left"), Handle.target(:top, id: "t-top")]
       ),
-      Node.new("plus", %{x: 185, y: 500},
-        %{shape: "plus", label: "plus", color: "#D06038"},
+      Node.new("plus", %{x: 185, y: 500}, %{shape: "plus", label: "plus", color: "#D06038"},
         type: :shape,
         class: "shape-node",
         handles: [Handle.target(:top, id: "t"), Handle.source(:right, id: "s")]
       ),
-      Node.new("triangle", %{x: 410, y: 530},
+      Node.new(
+        "triangle",
+        %{x: 410, y: 530},
         %{shape: "triangle", label: "triangle", color: "#5B9BD5"},
         type: :shape,
         class: "shape-node",

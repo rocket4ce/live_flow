@@ -113,7 +113,11 @@ defmodule Example.Pipeline.Engine do
 
             case result do
               {:condition, branch_value, output} ->
-                send(caller_pid, {:node_completed, node_id, output, duration, {:branch, branch_value}})
+                send(
+                  caller_pid,
+                  {:node_completed, node_id, output, duration, {:branch, branch_value}}
+                )
+
                 Map.put(outputs, node_id, {:branched, branch_value, output})
 
               output ->

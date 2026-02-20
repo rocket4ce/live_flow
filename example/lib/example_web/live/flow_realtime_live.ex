@@ -22,7 +22,13 @@ defmodule ExampleWeb.FlowRealtimeLive do
 
     socket =
       socket
-      |> assign(page_title: "Realtime Flow", flow: flow, history: History.new(), clipboard: Clipboard.new(), node_types: %{})
+      |> assign(
+        page_title: "Realtime Flow",
+        flow: flow,
+        history: History.new(),
+        clipboard: Clipboard.new(),
+        node_types: %{}
+      )
       |> Collaboration.join("flow:realtime", user,
         pubsub: Example.PubSub,
         presence: ExampleWeb.Presence
@@ -51,7 +57,10 @@ defmodule ExampleWeb.FlowRealtimeLive do
               <button class="btn btn-sm" phx-click="fit_view">
                 Fit View
               </button>
-              <button class="btn btn-sm btn-accent" phx-click={JS.dispatch("lf:auto-layout", to: "#realtime-flow")}>
+              <button
+                class="btn btn-sm btn-accent"
+                phx-click={JS.dispatch("lf:auto-layout", to: "#realtime-flow")}
+              >
                 Auto Layout
               </button>
               <button class="btn btn-sm btn-outline" phx-click="export_json">
@@ -70,10 +79,16 @@ defmodule ExampleWeb.FlowRealtimeLive do
                 class="hidden"
                 phx-hook="FileImport"
               />
-              <button class="btn btn-sm btn-outline" phx-click={JS.dispatch("lf:export-svg", to: "#realtime-flow")}>
+              <button
+                class="btn btn-sm btn-outline"
+                phx-click={JS.dispatch("lf:export-svg", to: "#realtime-flow")}
+              >
                 SVG
               </button>
-              <button class="btn btn-sm btn-outline" phx-click={JS.dispatch("lf:export-png", to: "#realtime-flow")}>
+              <button
+                class="btn btn-sm btn-outline"
+                phx-click={JS.dispatch("lf:export-png", to: "#realtime-flow")}
+              >
                 PNG
               </button>
             </div>
@@ -139,7 +154,13 @@ defmodule ExampleWeb.FlowRealtimeLive do
   @impl true
   def handle_event("export_json", _params, socket) do
     json = Serializer.to_json(socket.assigns.flow)
-    {:noreply, push_event(socket, "lf:download_file", %{content: json, filename: "flow.json", type: "application/json"})}
+
+    {:noreply,
+     push_event(socket, "lf:download_file", %{
+       content: json,
+       filename: "flow.json",
+       type: "application/json"
+     })}
   end
 
   @impl true
@@ -390,7 +411,10 @@ defmodule ExampleWeb.FlowRealtimeLive do
 
   # Private helpers
 
-  defp apply_and_store_node_change(flow, %{"type" => "position", "id" => id, "position" => pos} = change) do
+  defp apply_and_store_node_change(
+         flow,
+         %{"type" => "position", "id" => id, "position" => pos} = change
+       ) do
     dragging = Map.get(change, "dragging", false)
     FlowRealtimeStore.apply_change({:node_position, id, pos, dragging})
 

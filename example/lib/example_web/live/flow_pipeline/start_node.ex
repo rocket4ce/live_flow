@@ -20,7 +20,13 @@ defmodule ExampleWeb.FlowPipeline.StartNode do
     ~H"""
     <div class={"pipeline-node pipeline-node-#{@status}"}>
       <div class="pipeline-node-header" style="background: #22c55e">
-        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          width="14"
+          height="14"
+          viewBox="0 0 24 24"
+          fill="currentColor"
+        >
           <polygon points="5 3 19 12 5 21 5 3" />
         </svg>
         <span>Start</span>
