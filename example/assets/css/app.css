@@ -103,3 +103,6 @@
 [data-phx-session], [data-phx-teleported-src] { display: contents }
 
 /* This file is for your main application CSS */
+
+/* LiveFlow styles */
+@import "../../../assets/css/live_flow.css";

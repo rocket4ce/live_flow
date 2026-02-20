@@ -23,13 +23,15 @@ import "phoenix_html"
 import {Socket} from "phoenix"
 import {LiveSocket} from "phoenix_live_view"
 import {hooks as colocatedHooks} from "phoenix-colocated/example"
+import { LiveFlowHook } from "live_flow"
+import { FileImportHook } from "../../assets/js/live_flow/hooks/utility_hooks.js"
 import topbar from "../vendor/topbar"
 
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 const liveSocket = new LiveSocket("/live", Socket, {
   longPollFallbackMs: 2500,
   params: {_csrf_token: csrfToken},
-  hooks: {...colocatedHooks},
+  hooks: {...colocatedHooks, LiveFlow: LiveFlowHook, FileImport: FileImportHook},
 })
 
 // Show progress bar on live navigation and form submits
@@ -45,6 +47,20 @@ liveSocket.connect()
 // >> liveSocket.enableLatencySim(1000)  // enabled for duration of browser session
 // >> liveSocket.disableLatencySim()
 window.liveSocket = liveSocket
+
+// LiveFlow file download handler
+window.addEventListener("phx:lf:download_file", (event) => {
+  const { filename, content, content_type } = event.detail;
+  const blob = new Blob([content], { type: content_type });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+});
 
 // The lines below enable quality of life phoenix_live_reload
 // development features:
