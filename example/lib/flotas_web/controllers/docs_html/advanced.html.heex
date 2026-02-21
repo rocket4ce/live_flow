@@ -1,0 +1,197 @@
+<Layouts.docs flash={@flash} current_page={@current_page}>
+  <div class="breadcrumbs text-sm mb-6">
+    <ul>
+      <li><a href="/docs/quick-start">Docs</a></li>
+      <li>Advanced Features</li>
+    </ul>
+  </div>
+
+  <h1 class="text-4xl font-bold text-base-content mb-8">Advanced Features</h1>
+
+  <section id="auto-layout" class="scroll-mt-8 mb-12">
+    <h2 class="text-2xl font-bold text-base-content mb-4 border-b border-base-300 pb-2">
+      <a href="#auto-layout" class="hover:text-primary">Auto Layout</a>
+    </h2>
+    <p class="text-base-content/70 mb-6">
+      LiveFlow includes auto-layout powered by the ELK (Eclipse Layout Kernel) algorithm,
+      which runs client-side for optimal performance.
+    </p>
+    <pre class="bg-base-200 rounded-box p-4 overflow-x-auto text-sm mb-6" phx-no-curly-interpolation><code class="text-base-content">alias LiveFlow.Layout
+
+# Prepare layout data (server-side)
+# This creates the node/edge structure ELK needs
+layout_data = Layout.prepare_elk_data(flow, direction: "DOWN")
+
+# Push to client for ELK computation
+socket = push_event(socket, "lf:layout_data", layout_data)
+
+# Handle the computed layout positions from JS
+def handle_event("lf:node_change", %{"changes" =&gt; changes}, socket) do
+  flow = NodeChange.apply_changes(socket.assigns.flow, changes)
+  {:noreply, assign(socket, flow: flow)}
+end</code></pre>
+
+    <h3 class="text-xl font-semibold text-base-content mt-8 mb-3">Layout Directions</h3>
+    <div class="flex gap-2 flex-wrap">
+      <span class="badge badge-outline">"DOWN" — Top to bottom</span>
+      <span class="badge badge-outline">"RIGHT" — Left to right</span>
+      <span class="badge badge-outline">"UP" — Bottom to top</span>
+      <span class="badge badge-outline">"LEFT" — Right to left</span>
+    </div>
+  </section>
+
+  <section id="validation" class="scroll-mt-8 mb-12">
+    <h2 class="text-2xl font-bold text-base-content mb-4 border-b border-base-300 pb-2">
+      <a href="#validation" class="hover:text-primary">Connection Validation</a>
+    </h2>
+    <p class="text-base-content/70 mb-6">
+      LiveFlow provides composable validators to control which connections are allowed.
+    </p>
+    <pre class="bg-base-200 rounded-box p-4 overflow-x-auto text-sm mb-6" phx-no-curly-interpolation><code class="text-base-content">alias LiveFlow.Validation
+
+# Validate a connection with built-in validators
+validators = [
+  :no_duplicate_edges,     # Prevent duplicate connections
+  :nodes_exist,            # Ensure both nodes exist
+  :handles_valid,          # Ensure handles exist on nodes
+  :types_compatible,       # Check handle connect_type matches
+  :no_cycles,              # Prevent circular connections
+  {:max_connections, 3}    # Max 3 connections per handle
+]
+
+# Use in connect_end handler
+def handle_event("lf:connect_end", params, socket) do
+  case Validation.Connection.validate_and_create(
+    socket.assigns.flow, params, validators
+  ) do
+    {:ok, edge} -&gt;
+      flow = LiveFlow.State.add_edge(socket.assigns.flow, edge)
+      {:noreply, assign(socket, flow: flow)}
+
+    {:error, reason} -&gt;
+      {:noreply, put_flash(socket, :error, "Connection failed: #{reason}")}
+  end
+end</code></pre>
+
+    <h3 class="text-xl font-semibold text-base-content mt-8 mb-3">Built-in Validators</h3>
+    <div class="overflow-x-auto">
+      <table class="table table-sm">
+        <thead>
+          <tr><th>Validator</th><th>Description</th></tr>
+        </thead>
+        <tbody>
+          <tr><td><code>:no_duplicate_edges</code></td><td>Prevents creating the same connection twice</td></tr>
+          <tr><td><code>:nodes_exist</code></td><td>Verifies both source and target nodes exist</td></tr>
+          <tr><td><code>:handles_valid</code></td><td>Verifies the referenced handles exist on the nodes</td></tr>
+          <tr><td><code>:types_compatible</code></td><td>Checks that handle <code>connect_type</code> values match</td></tr>
+          <tr><td><code>:no_cycles</code></td><td>Prevents circular/cyclic connections</td></tr>
+          <tr>
+            <td><code phx-no-curly-interpolation>{:max_connections, n}</code></td>
+            <td>Limits the number of connections per handle to <code>n</code></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="collaboration" class="scroll-mt-8 mb-12">
+    <h2 class="text-2xl font-bold text-base-content mb-4 border-b border-base-300 pb-2">
+      <a href="#collaboration" class="hover:text-primary">Real-time Collaboration</a>
+    </h2>
+    <p class="text-base-content/70 mb-6">
+      LiveFlow supports real-time collaboration via Phoenix PubSub and Presence.
+      Multiple users can edit the same flow simultaneously with live cursors and
+      synchronized changes.
+    </p>
+
+    <h3 class="text-xl font-semibold text-base-content mt-8 mb-3">Setup</h3>
+    <pre class="bg-base-200 rounded-box p-4 overflow-x-auto text-sm mb-6" phx-no-curly-interpolation><code class="text-base-content">alias LiveFlow.Collaboration
+alias LiveFlow.Collaboration.User
+
+def mount(_params, _session, socket) do
+  # Create a collaboration user
+  user = %User{
+    id: socket.id,
+    name: "User #{:rand.uniform(999)}",
+    color: Enum.random(~w(#ef4444 #3b82f6 #10b981 #f59e0b #8b5cf6))
+  }
+
+  # Join the collaboration room
+  socket = Collaboration.join(socket, "my-room", MyApp.PubSub, user)
+
+  flow = LiveFlow.create_flow(nodes: nodes, edges: edges)
+  {:ok, assign(socket, flow: flow)}
+end</code></pre>
+
+    <h3 class="text-xl font-semibold text-base-content mt-8 mb-3">Broadcasting Changes</h3>
+    <pre class="bg-base-200 rounded-box p-4 overflow-x-auto text-sm mb-6" phx-no-curly-interpolation><code class="text-base-content"># Broadcast node changes to other users
+def handle_event("lf:node_change", %{"changes" =&gt; changes}, socket) do
+  flow = NodeChange.apply_changes(socket.assigns.flow, changes)
+  Collaboration.broadcast_change(socket, {:node_changes, changes})
+  {:noreply, assign(socket, flow: flow)}
+end
+
+# Broadcast drag movements (throttled)
+def handle_event("lf:drag_move", %{"changes" =&gt; changes}, socket) do
+  Collaboration.broadcast_drag_move(socket, changes)
+  {:noreply, socket}
+end
+
+# Broadcast cursor position
+def handle_event("lf:cursor_move", %{"x" =&gt; x, "y" =&gt; y}, socket) do
+  Collaboration.broadcast_cursor(socket, x, y)
+  {:noreply, socket}
+end</code></pre>
+
+    <h3 class="text-xl font-semibold text-base-content mt-8 mb-3">Handling Remote Changes</h3>
+    <pre class="bg-base-200 rounded-box p-4 overflow-x-auto text-sm mb-6" phx-no-curly-interpolation><code class="text-base-content"># In handle_info/2 — delegate to Collaboration module
+def handle_info(msg, socket) do
+  Collaboration.handle_info(msg, socket)
+end</code></pre>
+
+    <h3 class="text-xl font-semibold text-base-content mt-8 mb-3">PubSub Topics</h3>
+    <div class="overflow-x-auto">
+      <table class="table table-sm">
+        <thead>
+          <tr><th>Topic</th><th>Purpose</th><th>Frequency</th></tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>"flow:room_id"</code></td>
+            <td>Node/edge changes</td>
+            <td>On user action</td>
+          </tr>
+          <tr>
+            <td><code>"flow:room_id:cursors"</code></td>
+            <td>Cursor movements</td>
+            <td>Throttled (50ms server-side)</td>
+          </tr>
+          <tr>
+            <td><code>"flow:room_id:presence"</code></td>
+            <td>Join/leave events</td>
+            <td>On connect/disconnect</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h3 class="text-xl font-semibold text-base-content mt-8 mb-3">Client-side Interpolation</h3>
+    <p class="text-base-content/70 mb-4">
+      Remote movements are smoothly interpolated on the client using linear interpolation (lerp):
+    </p>
+    <ul class="list-disc list-inside text-base-content/70 space-y-1">
+      <li><strong>Remote drag:</strong> lerp factor 0.40 via <code>requestAnimationFrame</code></li>
+      <li><strong>Remote cursors:</strong> lerp factor 0.35, SVG arrow with colored name label</li>
+    </ul>
+  </section>
+
+  <%!-- Prev/Next Navigation --%>
+  <div class="flex justify-between pt-8 border-t border-base-300">
+    <a href="/docs/state" class="btn btn-ghost gap-2">
+      <span aria-hidden="true">&larr;</span> State Management
+    </a>
+    <a href="/docs/reference" class="btn btn-ghost gap-2">
+      API Reference <span aria-hidden="true">&rarr;</span>
+    </a>
+  </div>
+</Layouts.docs>

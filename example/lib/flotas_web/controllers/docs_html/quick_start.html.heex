@@ -1,0 +1,84 @@
+<Layouts.docs flash={@flash} current_page={@current_page}>
+  <div class="breadcrumbs text-sm mb-6">
+    <ul>
+      <li><a href="/docs/quick-start">Docs</a></li>
+      <li>Quick Start</li>
+    </ul>
+  </div>
+
+  <h1 class="text-4xl font-bold text-base-content mb-8">Quick Start</h1>
+
+  <section id="installation" class="scroll-mt-8 mb-12">
+    <h2 class="text-2xl font-bold text-base-content mb-4 border-b border-base-300 pb-2">
+      <a href="#installation" class="hover:text-primary">Installation</a>
+    </h2>
+    <p class="text-base-content/70 mb-4">
+      Add <code class="badge badge-ghost">live_flow</code> to your dependencies in
+      <code class="badge badge-ghost">mix.exs</code>:
+    </p>
+    <pre class="bg-base-200 rounded-box p-4 overflow-x-auto text-sm mb-6" phx-no-curly-interpolation><code class="text-base-content">defp deps do
+  [
+    {:live_flow, "~&gt; 0.2.3"}
+    # or for local development:
+    # {:live_flow, path: "../live_flow"}
+  ]
+end</code></pre>
+
+    <p class="text-base-content/70 mb-4">
+      Then install dependencies and import the JS/CSS assets:
+    </p>
+    <pre class="bg-base-200 rounded-box p-4 overflow-x-auto text-sm mb-6"><code class="text-base-content">$ mix deps.get</code></pre>
+  </section>
+
+  <section id="javascript-setup" class="scroll-mt-8 mb-12">
+    <h2 class="text-2xl font-bold text-base-content mb-4 border-b border-base-300 pb-2">
+      <a href="#javascript-setup" class="hover:text-primary">JavaScript Setup</a>
+    </h2>
+    <p class="text-base-content/70 mb-4">
+      In your <code class="badge badge-ghost">assets/js/app.js</code>, import and register the LiveFlow hook:
+    </p>
+    <pre class="bg-base-200 rounded-box p-4 overflow-x-auto text-sm mb-6" phx-no-curly-interpolation><code class="text-base-content">import { LiveFlowHook, FileImportHook, setupDownloadHandler } from "live_flow"
+
+let liveSocket = new LiveSocket("/live", Socket, {
+  hooks: {
+    LiveFlow: LiveFlowHook,
+    FileImportHook: FileImportHook,
+    // ...your other hooks
+  },
+  // ...
+})
+
+// Enable file download support (for JSON export)
+setupDownloadHandler(liveSocket)</code></pre>
+  </section>
+
+  <section id="css-setup" class="scroll-mt-8 mb-12">
+    <h2 class="text-2xl font-bold text-base-content mb-4 border-b border-base-300 pb-2">
+      <a href="#css-setup" class="hover:text-primary">CSS Setup</a>
+    </h2>
+    <p class="text-base-content/70 mb-4">
+      Import the LiveFlow styles in your <code class="badge badge-ghost">assets/css/app.css</code>:
+    </p>
+    <pre class="bg-base-200 rounded-box p-4 overflow-x-auto text-sm mb-6" phx-no-curly-interpolation><code class="text-base-content">@import "../../deps/live_flow/assets/css/live_flow.css";</code></pre>
+
+    <div class="alert alert-info mt-6">
+      <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" class="stroke-current shrink-0 w-6 h-6">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+      </svg>
+      <div>
+        <p class="font-semibold">Two things to pay attention to:</p>
+        <ol class="list-decimal list-inside mt-1 text-sm">
+          <li>The LiveFlow CSS must be imported for proper styling of nodes, edges, and controls.</li>
+          <li>The Flow component needs a parent container with defined dimensions (width/height).</li>
+        </ol>
+      </div>
+    </div>
+  </section>
+
+  <%!-- Prev/Next Navigation --%>
+  <div class="flex justify-end pt-8 border-t border-base-300">
+    <a href="/docs/core-concepts" class="btn btn-ghost gap-2">
+      Core Concepts <span aria-hidden="true">&rarr;</span>
+    </a>
+  </div>
+</Layouts.docs>

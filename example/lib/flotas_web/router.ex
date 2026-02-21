@@ -19,6 +19,10 @@ defmodule FlotasWeb.Router do
 
     get "/", PageController, :home
 
+    # Docs
+    get "/docs", DocsController, :index
+    get "/docs/:page", DocsController, :show
+
     # LiveFlow Demos
     live "/flow-demo", FlowDemoLive
     live "/flow-forms", FlowFormsLive

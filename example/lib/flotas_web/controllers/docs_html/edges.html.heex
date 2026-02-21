@@ -1,0 +1,221 @@
+<Layouts.docs flash={@flash} current_page={@current_page}>
+  <div class="breadcrumbs text-sm mb-6">
+    <ul>
+      <li><a href="/docs/quick-start">Docs</a></li>
+      <li>Edges & Handles</li>
+    </ul>
+  </div>
+
+  <h1 class="text-4xl font-bold text-base-content mb-8">Edges & Handles</h1>
+
+  <section id="edge-struct" class="scroll-mt-8 mb-12">
+    <h2 class="text-2xl font-bold text-base-content mb-4 border-b border-base-300 pb-2">
+      <a href="#edge-struct" class="hover:text-primary">Edge Struct</a>
+    </h2>
+    <p class="text-base-content/70 mb-6">
+      Edges are the connections between nodes. They connect a source handle to a target handle
+      and are rendered as SVG paths.
+    </p>
+    <pre class="bg-base-200 rounded-box p-4 overflow-x-auto text-sm mb-6" phx-no-curly-interpolation><code class="text-base-content">%LiveFlow.Edge{
+  id: "edge-1",                  # Unique identifier
+  source: "node-1",              # Source node ID
+  target: "node-2",              # Target node ID
+  source_handle: "source",       # Source handle ID
+  target_handle: "target",       # Target handle ID
+  type: :bezier,                 # Path type
+  animated: false,               # Animated dashed line?
+  selected: false,
+  selectable: true,
+  deletable: true,
+  marker_end: %{type: :arrow},   # Arrowhead at target
+  interaction_width: 20,         # Invisible hit area width
+  label: nil,                    # Text label on the edge
+  label_position: 0.5,           # 0.0 to 1.0 along path
+  data: %{},                     # Custom data
+  path_options: nil              # Extra path config
+}</code></pre>
+  </section>
+
+  <section id="creating-edges" class="scroll-mt-8 mb-12">
+    <h2 class="text-2xl font-bold text-base-content mb-4 border-b border-base-300 pb-2">
+      <a href="#creating-edges" class="hover:text-primary">Creating Edges</a>
+    </h2>
+    <pre class="bg-base-200 rounded-box p-4 overflow-x-auto text-sm mb-6" phx-no-curly-interpolation><code class="text-base-content"># Basic edge (auto-generates ID)
+edge = LiveFlow.new_edge("node-1", "node-2")
+
+# Edge with explicit ID
+edge = LiveFlow.new_edge("node-1", "node-2", "my-edge")
+
+# Edge with options
+edge = LiveFlow.new_edge("node-1", "node-2", "my-edge",
+  type: :smoothstep,
+  animated: true,
+  label: "connects to",
+  source_handle: "output-1",
+  target_handle: "input-1",
+  marker_end: %{type: :arrow_closed}
+)
+
+# Add to flow
+flow = LiveFlow.State.add_edge(flow, edge)
+
+# Remove from flow
+flow = LiveFlow.State.remove_edge(flow, "my-edge")</code></pre>
+  </section>
+
+  <section id="path-types" class="scroll-mt-8 mb-12">
+    <h2 class="text-2xl font-bold text-base-content mb-4 border-b border-base-300 pb-2">
+      <a href="#path-types" class="hover:text-primary">Path Types</a>
+    </h2>
+    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+      <div class="rounded-box border border-base-300 p-4">
+        <h4 class="font-semibold text-base-content mb-2">
+          <code>:bezier</code>
+          <span class="badge badge-sm badge-primary ml-2">default</span>
+        </h4>
+        <p class="text-sm text-base-content/70">
+          Cubic bezier curve. Smooth, flowing connections with automatic curvature (0.25 factor, min 50px offset).
+          Best for most use cases.
+        </p>
+      </div>
+
+      <div class="rounded-box border border-base-300 p-4">
+        <h4 class="font-semibold text-base-content mb-2"><code>:straight</code></h4>
+        <p class="text-sm text-base-content/70">
+          Direct straight line from source to target. Simple and clean. Best for short, direct connections.
+        </p>
+      </div>
+
+      <div class="rounded-box border border-base-300 p-4">
+        <h4 class="font-semibold text-base-content mb-2"><code>:step</code></h4>
+        <p class="text-sm text-base-content/70">
+          Orthogonal path with 90-degree turns. Creates an L-shaped or Z-shaped path.
+          Best for circuit-style or pipeline diagrams.
+        </p>
+      </div>
+
+      <div class="rounded-box border border-base-300 p-4">
+        <h4 class="font-semibold text-base-content mb-2"><code>:smoothstep</code></h4>
+        <p class="text-sm text-base-content/70">
+          Like step but with rounded corners (border_radius: 5px). Combines orthogonal routing
+          with smooth transitions.
+        </p>
+      </div>
+    </div>
+  </section>
+
+  <section id="edge-markers" class="scroll-mt-8 mb-12">
+    <h2 class="text-2xl font-bold text-base-content mb-4 border-b border-base-300 pb-2">
+      <a href="#edge-markers" class="hover:text-primary">Edge Markers</a>
+    </h2>
+    <pre class="bg-base-200 rounded-box p-4 overflow-x-auto text-sm mb-6" phx-no-curly-interpolation><code class="text-base-content"># Arrow at end (default)
+marker_end: %{type: :arrow}
+
+# Closed/filled arrow
+marker_end: %{type: :arrow_closed}
+
+# Custom colored marker
+marker_end: %{type: :arrow, color: "#ff0000"}</code></pre>
+  </section>
+
+  <section id="handles" class="scroll-mt-8 mb-12">
+    <h2 class="text-2xl font-bold text-base-content mb-4 border-b border-base-300 pb-2">
+      <a href="#handles" class="hover:text-primary">Handles & Connections</a>
+    </h2>
+    <p class="text-base-content/70 mb-6">
+      Handles are the connection points on nodes. When a user drags from a source handle to a
+      target handle, a new edge is created.
+    </p>
+
+    <h3 class="text-xl font-semibold text-base-content mt-8 mb-3">Handle Struct</h3>
+    <pre class="bg-base-200 rounded-box p-4 overflow-x-auto text-sm mb-6" phx-no-curly-interpolation><code class="text-base-content">%LiveFlow.Handle{
+  id: "source",          # Handle identifier
+  type: :source,         # :source (output) or :target (input)
+  position: :right,      # :top | :bottom | :left | :right
+  connectable: true,     # Can this handle be connected?
+  connect_type: nil      # Optional type for validation (e.g., :string, :number)
+}</code></pre>
+
+    <h3 class="text-xl font-semibold text-base-content mt-8 mb-3">Creating Handles</h3>
+    <pre class="bg-base-200 rounded-box p-4 overflow-x-auto text-sm mb-6" phx-no-curly-interpolation><code class="text-base-content"># Basic handles
+source = LiveFlow.new_handle("out", :source, position: :right)
+target = LiveFlow.new_handle("in", :target, position: :left)
+
+# Typed handles (for validation)
+string_output = LiveFlow.new_handle("str-out", :source,
+  position: :right,
+  connect_type: :string
+)
+string_input = LiveFlow.new_handle("str-in", :target,
+  position: :left,
+  connect_type: :string
+)
+
+# Add handles to a node
+node = LiveFlow.new_node("1", %{x: 0, y: 0}, %{label: "Node"},
+  handles: [source, target]
+)</code></pre>
+
+    <h3 class="text-xl font-semibold text-base-content mt-8 mb-3">Rendering Handles in Custom Nodes</h3>
+    <pre class="bg-base-200 rounded-box p-4 overflow-x-auto text-sm mb-6" phx-no-curly-interpolation><code class="text-base-content"># Inside a custom node component
+&lt;LiveFlow.Components.Handle.handle
+  id="my-source"
+  type={:source}
+  position={:right}
+/&gt;
+
+&lt;LiveFlow.Components.Handle.handle
+  id="my-target"
+  type={:target}
+  position={:left}
+/&gt;</code></pre>
+
+    <h3 class="text-xl font-semibold text-base-content mt-8 mb-3">Connection Events</h3>
+    <p class="text-base-content/70 mb-4">
+      When a user draws a connection, LiveFlow sends these events in order:
+    </p>
+    <div class="overflow-x-auto">
+      <table class="table table-sm">
+        <thead>
+          <tr>
+            <th>Event</th>
+            <th>When</th>
+            <th>Data</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><code>lf:connect_start</code></td>
+            <td>User starts dragging from a handle</td>
+            <td>node_id, handle_id, handle_type</td>
+          </tr>
+          <tr>
+            <td><code>lf:connect_move</code></td>
+            <td>User moves while connecting</td>
+            <td>x, y coordinates</td>
+          </tr>
+          <tr>
+            <td><code>lf:connect_end</code></td>
+            <td>User drops on a valid target handle</td>
+            <td>source, target, source_handle, target_handle</td>
+          </tr>
+          <tr>
+            <td><code>lf:connect_cancel</code></td>
+            <td>User drops on empty space</td>
+            <td>-</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <%!-- Prev/Next Navigation --%>
+  <div class="flex justify-between pt-8 border-t border-base-300">
+    <a href="/docs/nodes" class="btn btn-ghost gap-2">
+      <span aria-hidden="true">&larr;</span> Nodes
+    </a>
+    <a href="/docs/viewport" class="btn btn-ghost gap-2">
+      Viewport & Controls <span aria-hidden="true">&rarr;</span>
+    </a>
+  </div>
+</Layouts.docs>
