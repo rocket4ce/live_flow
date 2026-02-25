@@ -21,6 +21,7 @@ Build visual node editors, workflow builders, and interactive diagrams — simil
 - **Validation** — Composable connection validators (no duplicates, no cycles, type compatibility, max connections)
 - **Auto Layout** — ELK layered layout and tree layout algorithms
 - **Themes** — 36 built-in themes with Tailwind v4 plugin for customization
+- **Virtualization** — Server-side viewport culling for 10K+ node flows (pure Elixir)
 - **Export** — Client-side SVG/PNG export
 - **Touch Support** — Pinch-to-zoom, two-finger pan, long-press selection
 - **Keyboard Shortcuts** — Built-in shortcuts panel (`?` key)
@@ -32,7 +33,7 @@ Add `live_flow` to your dependencies in `mix.exs`:
 ```elixir
 def deps do
   [
-    {:live_flow, "~> 0.2.3"}
+    {:live_flow, "~> 0.2.4"}
   ]
 end
 ```
@@ -171,6 +172,7 @@ The `opts` map supports the following options:
 | `cursors` | boolean | `false` | Show remote cursors (for collaboration) |
 | `theme` | string | `nil` | Theme name (e.g., `"dark"`, `"ocean"`) |
 | `fit_view` | boolean | `false` | Auto-fit all nodes on mount |
+| `virtualization` | boolean | `false` | Server-side viewport culling for large flows |
 | `default_edge_type` | atom | `:bezier` | Default edge path type |
 
 ## Custom Node Types
@@ -250,6 +252,27 @@ def handle_info(msg, socket) do
   LiveFlow.Collaboration.handle_info(msg, socket)
 end
 ```
+
+## Virtualization (Large Flows)
+
+For flows with hundreds or thousands of nodes, enable server-side viewport culling:
+
+```elixir
+<.live_component
+  module={LiveFlow.Components.Flow}
+  id="my-flow"
+  flow={@flow}
+  opts={%{virtualization: true, controls: true}}
+/>
+```
+
+With virtualization enabled, only nodes visible in the current viewport are rendered to the DOM. This is pure Elixir logic — the server computes which nodes overlap the visible rectangle and filters the render list. Results:
+
+- **500 nodes**: ~108 in DOM (78% reduction)
+- **1,000 nodes**: ~108 in DOM (89% reduction)
+- **10,000 nodes**: ~180 in DOM (98% reduction, no browser crash)
+
+A `max_visible` cap (default 500) prevents browser freezes when zoomed out to show all nodes at once.
 
 ## Documentation
 

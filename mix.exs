@@ -1,7 +1,7 @@
 defmodule LiveFlow.MixProject do
   use Mix.Project
 
-  @version "0.2.3"
+  @version "0.2.4"
   @source_url "https://github.com/rocket4ce/live_flow"
 
   def project do
@@ -87,7 +87,8 @@ defmodule LiveFlow.MixProject do
           LiveFlow.Components.NodeWrapper,
           LiveFlow.Components.Edge,
           LiveFlow.Components.Handle,
-          LiveFlow.Components.Marker
+          LiveFlow.Components.Marker,
+          LiveFlow.Components.NodeResizer
         ],
         "Path Algorithms": [
           LiveFlow.Paths.Bezier,
@@ -95,6 +96,10 @@ defmodule LiveFlow.MixProject do
           LiveFlow.Paths.Step,
           LiveFlow.Paths.Smoothstep,
           LiveFlow.Paths.Path
+        ],
+        "Viewport & Performance": [
+          LiveFlow.Viewport,
+          LiveFlow.Viewport.Culling
         ],
         Features: [
           LiveFlow.History,

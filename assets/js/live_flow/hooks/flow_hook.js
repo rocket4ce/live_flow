@@ -508,6 +508,19 @@ export const LiveFlowHook = {
       return;
     }
 
+    // Edge reconnect handle drag
+    const reconnectHandle = target.closest('.lf-edge-reconnect-handle');
+    if (reconnectHandle) {
+      event.preventDefault();
+      event.stopPropagation();
+      const edgeId = reconnectHandle.dataset.edgeId;
+      const reconnectEnd = reconnectHandle.dataset.reconnectEnd;
+      if (edgeId && this.connection.startReconnect(edgeId, reconnectEnd, event)) {
+        this.interactionMode = 'connect';
+      }
+      return;
+    }
+
     // Edge insert "+" button click
     const insertBtn = target.closest('.lf-edge-insert-btn');
     if (insertBtn) {

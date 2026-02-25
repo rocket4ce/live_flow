@@ -263,6 +263,38 @@
   box-shadow: 0 2px 8px rgba(220, 38, 38, 0.2);
 }
 
+/* ===== Edge Reconnect Handles ===== */
+.lf-edge-reconnect-handle {
+  fill: var(--lf-node-bg);
+  stroke: var(--lf-edge-color);
+  stroke-width: 1.5;
+  cursor: crosshair;
+  pointer-events: all;
+  opacity: 0;
+  transition: opacity 0.15s ease, fill 0.15s ease;
+}
+
+.lf-edge-group:hover .lf-edge-reconnect-handle,
+.lf-edge-reconnect-handle:hover {
+  opacity: 1;
+}
+
+.lf-edge-reconnect-handle:hover {
+  fill: var(--lf-handle-color);
+  stroke: var(--lf-handle-color);
+}
+
+/* ===== Edge Toolbar ===== */
+.lf-edge-toolbar-wrapper {
+  pointer-events: all;
+  overflow: visible;
+}
+
+.lf-edge-label-custom {
+  pointer-events: all;
+  overflow: visible;
+}
+
 /* ===== Node Layer (HTML) ===== */
 .lf-nodes {
   position: absolute;

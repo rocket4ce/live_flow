@@ -100,6 +100,9 @@ defmodule LiveFlow.Components.Flow do
       end)
       |> assign_new(:node_types, fn -> %{} end)
       |> assign_new(:node_renderer, fn -> nil end)
+      |> assign_new(:edge_types, fn -> %{} end)
+      |> assign_new(:edge_label_renderer, fn -> nil end)
+      |> assign_new(:edge_toolbar, fn -> nil end)
       |> assign_new(:on_nodes_change, fn -> nil end)
       |> assign_new(:on_edges_change, fn -> nil end)
       |> assign_new(:on_connect, fn -> nil end)
@@ -201,6 +204,9 @@ defmodule LiveFlow.Components.Flow do
             edge={edge}
             source_node={@flow.nodes[edge.source]}
             target_node={@flow.nodes[edge.target]}
+            edge_types={@edge_types}
+            edge_label_renderer={@edge_label_renderer}
+            edge_toolbar={@edge_toolbar}
           />
 
           <%!-- Connection in progress --%>

@@ -127,6 +127,9 @@ defmodule LiveFlow.Serializer do
     |> put_unless("label_position", edge.label_position, 0.5)
     |> put_if("label_style", serialize_map(edge.label_style), %{})
     |> put_if("path_options", serialize_map(edge.path_options), %{})
+    |> put_unless("source_floating", edge.source_floating, false)
+    |> put_unless("target_floating", edge.target_floating, false)
+    |> put_unless("reconnectable", edge.reconnectable, false)
   end
 
   # === Handle Serialization ===
@@ -227,7 +230,10 @@ defmodule LiveFlow.Serializer do
         z_index: Map.get(data, "z_index", 0),
         label_position: Map.get(data, "label_position", 0.5),
         label_style: data["label_style"] || %{},
-        path_options: data["path_options"] || %{}
+        path_options: data["path_options"] || %{},
+        source_floating: Map.get(data, "source_floating", false),
+        target_floating: Map.get(data, "target_floating", false),
+        reconnectable: Map.get(data, "reconnectable", false)
       ]
       |> Enum.reject(fn {_k, v} -> is_nil(v) end)
 

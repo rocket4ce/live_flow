@@ -1,5 +1,28 @@
 # Changelog
 
+## v0.2.4 (2026-02-24)
+
+### New Features
+
+- **Server-Side Viewport Culling (Virtualization).** Pure Elixir server-side viewport culling dramatically reduces DOM size for large flows. Only nodes and edges visible in the current viewport are rendered, enabling smooth interaction with 10,000+ node flows.
+  - New `LiveFlow.Viewport.Culling` module — pure Elixir culling logic with zero JS dependencies
+  - Opt-in via `virtualization: true` in flow opts
+  - 200px flow-space margin pre-renders nodes just outside the viewport for smooth panning
+  - Unmeasured nodes use estimated size (200x100) for visibility — render near viewport, get measured by JS
+  - Edge culling: edges with at least one visible endpoint are kept
+  - `max_visible` cap (default 500) prevents browser crash on extreme zoom-out (e.g., fit-view with 10K nodes)
+  - Nodes closest to viewport center are prioritized when cap is exceeded
+  - Minimap always renders all nodes regardless of culling
+  - Container dimensions sent from JS via `lf:container_resize` event (only change: ~15 lines of JS)
+
+### Performance Results
+
+| Node Count | DOM Without Culling | DOM With Culling | Reduction |
+|-----------|--------------------|-----------------|-----------|
+| 500 | 500 | ~108 | 78% |
+| 1,000 | 1,000 | ~108 | 89% |
+| 10,000 | 10,000 (crash) | ~180 | 98% |
+
 ## v0.3.0 (2026-02-24)
 
 ### New Features

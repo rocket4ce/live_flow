@@ -80,6 +80,12 @@ export class ConnectionManager {
   endConnection(event) {
     if (!this.connecting) return;
 
+    // If reconnecting, use the reconnect-specific handler
+    if (this.connecting.reconnecting) {
+      this.endReconnect(event);
+      return;
+    }
+
     // Remove preview
     this.removePreviewOverlay();
 
@@ -214,6 +220,102 @@ export class ConnectionManager {
     this.hook.container.querySelectorAll('[data-connecting]').forEach(el => {
       delete el.dataset.connecting;
     });
+  }
+
+  // ===== Reconnect Edge =====
+
+  /**
+   * Start reconnecting an existing edge by dragging one of its endpoints.
+   * @param {string} edgeId - The edge being reconnected
+   * @param {string} end - 'source' or 'target' — which end is being dragged
+   * @param {Event} event - The mouse/touch event
+   */
+  startReconnect(edgeId, end, event) {
+    // Find the edge group in SVG to get its endpoint positions
+    const edgeGroup = this.hook.container.querySelector(`[data-edge-id="${edgeId}"].lf-edge-group`);
+    if (!edgeGroup) return false;
+
+    const source = edgeGroup.dataset.source;
+    const target = edgeGroup.dataset.target;
+    const sourceHandle = edgeGroup.dataset.sourceHandle || null;
+    const targetHandle = edgeGroup.dataset.targetHandle || null;
+
+    // The "anchor" end is the one that stays fixed
+    // The "dragged" end is the one the user is moving
+    const anchorNodeId = end === 'source' ? target : source;
+    const anchorHandleId = end === 'source' ? targetHandle : sourceHandle;
+
+    // Find the anchor handle's position
+    const anchorHandleEl = anchorHandleId
+      ? this.hook.container.querySelector(`[data-node-id="${anchorNodeId}"] [data-handle-id="${anchorHandleId}"]`)
+      : this.hook.container.querySelector(`[data-node-id="${anchorNodeId}"] [data-handle-type="${end === 'source' ? 'target' : 'source'}"]`);
+
+    if (!anchorHandleEl) return false;
+
+    const rect = anchorHandleEl.getBoundingClientRect();
+    const containerRect = this.hook.container.getBoundingClientRect();
+    const screenX = rect.left + rect.width / 2 - containerRect.left;
+    const screenY = rect.top + rect.height / 2 - containerRect.top;
+    const [flowX, flowY] = this.hook.coords.screenToFlow(screenX, screenY);
+
+    const handlePosition = anchorHandleEl.dataset.handlePosition || (end === 'source' ? 'left' : 'right');
+
+    this.connecting = {
+      nodeId: anchorNodeId,
+      handleId: anchorHandleId,
+      handleType: end === 'source' ? 'target' : 'source',
+      handlePosition,
+      connectType: anchorHandleEl.dataset.handleConnectType || null,
+      startX: flowX,
+      startY: flowY,
+      currentX: flowX,
+      currentY: flowY,
+      reconnecting: true,
+      reconnectEdgeId: edgeId,
+      reconnectEnd: end
+    };
+
+    // Create preview overlay from the anchor point
+    this.createPreviewOverlay(flowX, flowY);
+
+    return true;
+  }
+
+  /**
+   * End a reconnect attempt
+   */
+  endReconnect(event) {
+    if (!this.connecting || !this.connecting.reconnecting) return;
+
+    this.removePreviewOverlay();
+
+    const target = this.findTargetHandle(event);
+    const { reconnectEdgeId, reconnectEnd } = this.connecting;
+
+    if (target && this.isValidConnection(this.connecting, target)) {
+      // Reconnect to the new handle
+      this.hook.pushEvent('lf:reconnect_edge', {
+        edge_id: reconnectEdgeId,
+        end: reconnectEnd,
+        node_id: target.nodeId,
+        handle_id: target.handleId
+      });
+    } else {
+      // Dropped on empty space — delete the edge
+      this.hook.pushEvent('lf:delete_reconnect_edge', {
+        edge_id: reconnectEdgeId
+      });
+    }
+
+    this.connecting = null;
+    this.clearHandleHighlights();
+  }
+
+  /**
+   * Check if we're in reconnect mode
+   */
+  isReconnecting() {
+    return this.connecting !== null && this.connecting.reconnecting === true;
   }
 
   destroy() {
