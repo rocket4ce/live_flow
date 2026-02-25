@@ -46,7 +46,8 @@ defmodule LiveFlow.Components.Edge do
       get_handle_position(target_node, source_node, edge.target_handle, :target, edge)
 
     # Calculate path using the base type for path computation
-    path_type = base_path_type(edge.type)
+    # Custom edges can specify path_options: %{base_type: :smoothstep} to override
+    path_type = Map.get(edge.path_options, :base_type, base_path_type(edge.type))
     path_module = Path.module_for_type(path_type)
 
     path_result =
@@ -83,6 +84,19 @@ defmodule LiveFlow.Components.Edge do
   end
 
   defp render_custom_edge(renderer, assigns) do
+    # Mark all keys as changed so LiveView always diffs custom edge output.
+    # Edge paths are server-computed and must update when nodes move.
+    changed_keys = %{
+      edge: true,
+      path: true,
+      label_x: true,
+      label_y: true,
+      source_pos: true,
+      target_pos: true,
+      marker_start_id: true,
+      marker_end_id: true
+    }
+
     renderer.(%{
       edge: assigns.edge,
       path: assigns.path,
@@ -92,7 +106,7 @@ defmodule LiveFlow.Components.Edge do
       target_pos: assigns.target_pos,
       marker_start_id: assigns.marker_start_id,
       marker_end_id: assigns.marker_end_id,
-      __changed__: %{}
+      __changed__: changed_keys
     })
   end
 
