@@ -21,6 +21,7 @@ defmodule LiveFlow.Node do
     * `:hidden` - Whether the node is visible
     * `:dragging` - Whether the node is currently being dragged
     * `:resizing` - Whether the node is currently being resized
+    * `:resizable` - Whether the node can be resized
     * `:parent_id` - ID of parent node for grouping
     * `:extent` - Movement constraint (`:parent` or bounds map)
     * `:style` - Custom inline styles map
@@ -55,6 +56,7 @@ defmodule LiveFlow.Node do
           hidden: boolean(),
           dragging: boolean(),
           resizing: boolean(),
+          resizable: boolean(),
           parent_id: String.t() | nil,
           extent: :parent | map() | nil,
           style: map(),
@@ -81,6 +83,7 @@ defmodule LiveFlow.Node do
     hidden: false,
     dragging: false,
     resizing: false,
+    resizable: false,
     extent: nil,
     style: %{},
     z_index: 0,
@@ -98,6 +101,7 @@ defmodule LiveFlow.Node do
     * `:connectable` - Whether connectable (default: `true`)
     * `:selectable` - Whether selectable (default: `true`)
     * `:deletable` - Whether deletable (default: `true`)
+    * `:resizable` - Whether resizable (default: `false`)
     * `:parent_id` - Parent node ID for grouping
     * `:extent` - Movement constraint
     * `:style` - Custom inline styles
@@ -124,6 +128,7 @@ defmodule LiveFlow.Node do
       connectable: Keyword.get(opts, :connectable, true),
       selectable: Keyword.get(opts, :selectable, true),
       deletable: Keyword.get(opts, :deletable, true),
+      resizable: Keyword.get(opts, :resizable, false),
       parent_id: Keyword.get(opts, :parent_id),
       extent: Keyword.get(opts, :extent),
       style: Keyword.get(opts, :style, %{}),
