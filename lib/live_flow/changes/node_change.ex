@@ -88,7 +88,14 @@ defmodule LiveFlow.Changes.NodeChange do
     height = change["height"]
 
     State.update_node(state, id, fn node ->
-      Node.set_dimensions(node, width, height)
+      # Skip content-measurement dimensions for resizable nodes that have
+      # already been explicitly resized — prevents ResizeObserver from
+      # overwriting user-set dimensions with content-fit sizes.
+      if node.resizable && node.measured && node.width && node.height do
+        node
+      else
+        Node.set_dimensions(node, width, height)
+      end
     end)
   end
 
@@ -135,6 +142,24 @@ defmodule LiveFlow.Changes.NodeChange do
     state
     |> State.remove_node(node.id)
     |> State.add_node(node)
+  end
+
+  def apply_change(state, %{"type" => "resize"} = change) do
+    id = change["id"]
+    width = change["width"]
+    height = change["height"]
+    position = change["position"]
+    resizing = change["resizing"] || false
+
+    State.update_node(state, id, fn node ->
+      node = %{node | width: width, height: height, measured: true, resizing: resizing}
+
+      if position do
+        %{node | position: normalize_position(position)}
+      else
+        node
+      end
+    end)
   end
 
   # Handle atom keys (when created from Elixir)
@@ -199,6 +224,22 @@ defmodule LiveFlow.Changes.NodeChange do
       "type" => "remove",
       "id" => id
     }
+  end
+
+  @doc """
+  Creates a resize change.
+  """
+  @spec resize(String.t(), number(), number(), map() | nil) :: map()
+  def resize(id, width, height, position \\ nil) do
+    change = %{
+      "type" => "resize",
+      "id" => id,
+      "width" => width,
+      "height" => height,
+      "resizing" => false
+    }
+
+    if position, do: Map.put(change, "position", position), else: change
   end
 
   defp normalize_position(%{"x" => x, "y" => y}), do: %{x: x / 1.0, y: y / 1.0}

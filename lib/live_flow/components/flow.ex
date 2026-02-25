@@ -49,6 +49,7 @@ defmodule LiveFlow.Components.Flow do
   alias LiveFlow.{State, Viewport}
   alias LiveFlow.Components.{NodeWrapper, Edge, Marker}
   alias LiveFlow.Changes.{NodeChange, EdgeChange}
+  alias LiveFlow.Viewport.Culling
 
   @default_opts %{
     pan_on_drag: true,
@@ -68,7 +69,8 @@ defmodule LiveFlow.Components.Flow do
     delete_key_code: "Backspace",
     theme: nil,
     cursors: false,
-    helper_lines: false
+    helper_lines: false,
+    virtualization: false
   }
 
   @impl true
@@ -76,7 +78,9 @@ defmodule LiveFlow.Components.Flow do
     {:ok,
      assign(socket,
        connecting: nil,
-       selection_box: nil
+       selection_box: nil,
+       container_width: nil,
+       container_height: nil
      )}
   end
 
@@ -123,6 +127,18 @@ defmodule LiveFlow.Components.Flow do
     # Sort edges (selected edges on top)
     sorted_edges = sort_edges(flow.edges, flow.selected_edges)
 
+    # Apply viewport culling if virtualization is enabled
+    {sorted_nodes, sorted_edges} =
+      if opts[:virtualization] && assigns.container_width && assigns.container_height do
+        {visible_nodes, visible_ids} =
+          Culling.cull_nodes(sorted_nodes, flow.viewport, assigns.container_width, assigns.container_height)
+
+        visible_edges = Culling.cull_edges(sorted_edges, visible_ids)
+        {visible_nodes, visible_edges}
+      else
+        {sorted_nodes, sorted_edges}
+      end
+
     # Collect unique marker definitions from all edges
     markers = Marker.collect_markers(Map.values(flow.edges))
 
@@ -155,6 +171,7 @@ defmodule LiveFlow.Components.Flow do
       data-elements-selectable={@opts.elements_selectable}
       data-fit-view-on-init={@opts.fit_view_on_init}
       data-helper-lines={@opts.helper_lines}
+      data-virtualization={@opts.virtualization}
     >
       <%!-- Helper lines overlay (phx-update=ignore so LV won't remove dynamic SVG) --%>
       <div
@@ -348,6 +365,11 @@ defmodule LiveFlow.Components.Flow do
   def handle_event("lf:fit_view", _params, socket) do
     socket = push_event(socket, "lf:fit_view", %{padding: 0.1, duration: 200})
     {:noreply, socket}
+  end
+
+  @impl true
+  def handle_event("lf:container_resize", %{"width" => w, "height" => h}, socket) do
+    {:noreply, assign(socket, container_width: w, container_height: h)}
   end
 
   @impl true

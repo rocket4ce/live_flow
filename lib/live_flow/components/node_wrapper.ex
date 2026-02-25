@@ -69,6 +69,8 @@ defmodule LiveFlow.Components.NodeWrapper do
       data-connectable={@node.connectable}
       data-selectable={@node.selectable}
       data-dragging={@node.dragging}
+      data-resizable={@node.resizable}
+      data-resizing={@node.resizing}
       style={@style}
       phx-click="lf:node_click"
       phx-value-node-id={@node.id}
@@ -155,18 +157,28 @@ defmodule LiveFlow.Components.NodeWrapper do
     renderer.(%{node: node, __changed__: %{}})
   end
 
-  defp node_style(%Node{position: pos, z_index: z, style: custom_style, dragging: dragging}) do
+  defp node_style(%Node{} = node) do
+    %{position: pos, z_index: z, style: custom_style, dragging: dragging} = node
+
     base_style = [
       "left: #{pos.x}px",
       "top: #{pos.y}px",
       "z-index: #{z + if(dragging, do: 1000, else: 0)}"
     ]
 
+    # Include explicit width/height for resizable nodes that have been measured
+    resize_style =
+      if Map.get(node, :resizable) && node.width && node.height do
+        ["width: #{node.width}px", "height: #{node.height}px"]
+      else
+        []
+      end
+
     custom =
       custom_style
       |> Enum.map(fn {k, v} -> "#{k}: #{v}" end)
 
-    (base_style ++ custom)
+    (base_style ++ resize_style ++ custom)
     |> Enum.join("; ")
   end
 end

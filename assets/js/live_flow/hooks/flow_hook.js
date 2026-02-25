@@ -10,6 +10,7 @@ import { PanZoomManager } from '../interaction/pan_zoom.js';
 import { NodeDragManager } from '../interaction/node_drag.js';
 import { ConnectionManager } from '../interaction/connection.js';
 import { SelectionManager } from '../interaction/selection.js';
+import { NodeResizeManager } from '../interaction/node_resize.js';
 import { CursorManager } from '../interaction/cursor.js';
 import { HelperLinesManager } from '../interaction/helper_lines.js';
 import { exportSVG, exportPNG, downloadString, downloadBlob } from '../utils/export.js';
@@ -32,7 +33,8 @@ export const LiveFlowHook = {
       elementsSelectable: this.el.dataset.elementsSelectable !== 'false',
       fitViewOnInit: this.el.hasAttribute('data-fit-view-on-init'),
       cursors: this.el.hasAttribute('data-cursors'),
-      helperLines: this.el.hasAttribute('data-helper-lines')
+      helperLines: this.el.hasAttribute('data-helper-lines'),
+      virtualization: this.el.hasAttribute('data-virtualization')
     };
 
     // State
@@ -53,6 +55,7 @@ export const LiveFlowHook = {
     this.nodeDrag = new NodeDragManager(this);
     this.connection = new ConnectionManager(this);
     this.selection = new SelectionManager(this);
+    this.nodeResize = new NodeResizeManager(this);
 
     // Initialize cursor manager if collaboration cursors are enabled
     if (this.config.cursors) {
@@ -231,6 +234,7 @@ export const LiveFlowHook = {
     this.nodeDrag.destroy();
     this.connection.destroy();
     this.selection.destroy();
+    this.nodeResize.destroy();
     this.cursor?.destroy();
     this.helperLines?.destroy();
     this.resizeObserver?.disconnect();
@@ -240,6 +244,8 @@ export const LiveFlowHook = {
   },
 
   updated() {
+    // Re-read virtualization config (may change dynamically)
+    this.config.virtualization = this.el.hasAttribute('data-virtualization');
     // Re-measure container on updates
     this.measureContainer();
     // Re-apply client-side viewport transform after DOM patch — the server
@@ -250,6 +256,12 @@ export const LiveFlowHook = {
     if (this.nodeDrag.isDragging()) {
       this.nodeDrag.reapplyPositions();
     }
+    // Re-apply client-side resize dimensions after DOM patch
+    if (this.nodeResize.isResizing() || this.nodeResize._pendingClear) {
+      this.nodeResize.reapplyDimensions();
+    }
+    // Clear pending resize dimensions once server has rendered them
+    this.nodeResize.onUpdated();
     // Measure any new or changed nodes
     requestAnimationFrame(() => this.measureNodes());
   },
@@ -308,12 +320,22 @@ export const LiveFlowHook = {
 
   measureContainer() {
     const rect = this.container.getBoundingClientRect();
+    const prevW = this.containerRect?.width;
+    const prevH = this.containerRect?.height;
     this.containerRect = {
       width: rect.width,
       height: rect.height,
       left: rect.left,
       top: rect.top
     };
+    if (this.config.virtualization &&
+        (rect.width !== prevW || rect.height !== prevH) &&
+        rect.width > 0 && rect.height > 0) {
+      this.pushEventTo(this.el, 'lf:container_resize', {
+        width: Math.round(rect.width),
+        height: Math.round(rect.height)
+      });
+    }
   },
 
   /**
@@ -321,6 +343,10 @@ export const LiveFlowHook = {
    * Only measures .lf-node elements (not handles or other children).
    */
   measureNodes() {
+    // Skip during pending resize commit to avoid sending stale content-fit
+    // dimensions that would overwrite the user's resize
+    if (this.nodeResize?._pendingClear) return;
+
     const nodeEls = this.nodeLayer?.querySelectorAll('.lf-node[data-node-id]');
     if (!nodeEls) return;
 
@@ -363,6 +389,10 @@ export const LiveFlowHook = {
 
     // ResizeObserver for individual node elements
     this.nodeResizeObserver = new ResizeObserver(entries => {
+      // Skip during active resize or pending resize commit to avoid
+      // dimension changes that would overwrite the resize
+      if (this.nodeResize?.isResizing() || this.nodeResize?._pendingClear) return;
+
       const changes = [];
       for (const entry of entries) {
         const el = entry.target;
@@ -415,6 +445,18 @@ export const LiveFlowHook = {
     const target = event.target;
     const nodeEl = target.closest('[data-node-id]');
     const handleEl = target.closest('[data-handle-id]');
+
+    // Node resizer click
+    const resizerEl = target.closest('.lf-node-resizer');
+    if (resizerEl && nodeEl) {
+      event.preventDefault();
+      event.stopPropagation();
+      const resizePosition = resizerEl.dataset.resizerPosition;
+      if (this.nodeResize.startResize(nodeEl.dataset.nodeId, resizePosition, event)) {
+        this.interactionMode = 'resize';
+      }
+      return;
+    }
 
     // Handle click
     if (handleEl && nodeEl) {
@@ -529,6 +571,9 @@ export const LiveFlowHook = {
       case 'select':
         this.selection.moveSelection(event);
         break;
+      case 'resize':
+        this.nodeResize.moveResize(event);
+        break;
     }
   },
 
@@ -545,6 +590,9 @@ export const LiveFlowHook = {
         break;
       case 'select':
         this.selection.endSelection();
+        break;
+      case 'resize':
+        this.nodeResize.endResize();
         break;
     }
     this.interactionMode = null;

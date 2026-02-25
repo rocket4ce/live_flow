@@ -1,5 +1,17 @@
 # Changelog
 
+## v0.3.0 (2026-02-24)
+
+### New Features
+
+- **Node Resizing.** New `LiveFlow.Components.NodeResizer` component adds interactive resize handles to custom nodes. Users can drag corner and edge handles to resize nodes, with real-time edge path updates during resize. Supports configurable minimum dimensions and 8 resize handle positions (N, S, E, W, NE, NW, SE, SW).
+  - New `NodeResizer.node_resizer/1` function component — drop it inside any custom node template
+  - New `resizable: true` option on `Node.new/4` to mark nodes as resizable
+  - New `resize` change type in `NodeChange` for server-side dimension updates
+  - Client-side resize with zero-latency feedback (same pattern as node drag)
+  - Touch/mobile support with larger resize handles on coarse pointer devices
+  - CSS variables: `--lf-resizer-color`, `--lf-resizer-size` for customization
+
 ## v0.2.3 (2026-02-20)
 
 ### Improvements

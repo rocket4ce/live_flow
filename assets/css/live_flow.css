@@ -346,6 +346,126 @@
   color: var(--lf-text-primary);
 }
 
+/* ===== Node Resizer ===== */
+.lf-node-resizer-container {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 15;
+}
+
+.lf-node-resizer {
+  position: absolute;
+  pointer-events: all;
+}
+
+/* Corner handles */
+.lf-node-resizer-corner {
+  width: var(--lf-resizer-size, 8px);
+  height: var(--lf-resizer-size, 8px);
+  background: var(--lf-resizer-color, var(--lf-handle-hover-bg, #3b82f6));
+  border: 1px solid var(--lf-node-bg, #fff);
+  border-radius: 2px;
+  z-index: 16;
+  transition: transform 0.12s ease;
+}
+
+.lf-node-resizer-corner:hover {
+  transform: scale(1.4);
+}
+
+/* Line handles */
+.lf-node-resizer-line {
+  background: transparent;
+  z-index: 15;
+}
+
+.lf-node-resizer-line:hover {
+  background: var(--lf-resizer-color, var(--lf-handle-hover-bg, #3b82f6));
+  opacity: 0.3;
+}
+
+/* Corner positions */
+.lf-node-resizer[data-resizer-position="nw"] {
+  top: calc(-1 * var(--lf-resizer-size, 8px) / 2);
+  left: calc(-1 * var(--lf-resizer-size, 8px) / 2);
+  cursor: nwse-resize;
+}
+
+.lf-node-resizer[data-resizer-position="ne"] {
+  top: calc(-1 * var(--lf-resizer-size, 8px) / 2);
+  right: calc(-1 * var(--lf-resizer-size, 8px) / 2);
+  cursor: nesw-resize;
+}
+
+.lf-node-resizer[data-resizer-position="sw"] {
+  bottom: calc(-1 * var(--lf-resizer-size, 8px) / 2);
+  left: calc(-1 * var(--lf-resizer-size, 8px) / 2);
+  cursor: nesw-resize;
+}
+
+.lf-node-resizer[data-resizer-position="se"] {
+  bottom: calc(-1 * var(--lf-resizer-size, 8px) / 2);
+  right: calc(-1 * var(--lf-resizer-size, 8px) / 2);
+  cursor: nwse-resize;
+}
+
+/* Edge line positions */
+.lf-node-resizer[data-resizer-position="n"] {
+  top: -2px;
+  left: 10%;
+  right: 10%;
+  height: 6px;
+  cursor: ns-resize;
+}
+
+.lf-node-resizer[data-resizer-position="s"] {
+  bottom: -2px;
+  left: 10%;
+  right: 10%;
+  height: 6px;
+  cursor: ns-resize;
+}
+
+.lf-node-resizer[data-resizer-position="e"] {
+  top: 10%;
+  bottom: 10%;
+  right: -2px;
+  width: 6px;
+  cursor: ew-resize;
+}
+
+.lf-node-resizer[data-resizer-position="w"] {
+  top: 10%;
+  bottom: 10%;
+  left: -2px;
+  width: 6px;
+  cursor: ew-resize;
+}
+
+/* Node resizing state */
+.lf-node[data-resizing="true"] {
+  z-index: 1000 !important;
+}
+
+/* Touch/mobile — larger resize handles */
+@media (pointer: coarse) {
+  .lf-node-resizer-corner {
+    width: calc(var(--lf-resizer-size, 8px) * 1.5);
+    height: calc(var(--lf-resizer-size, 8px) * 1.5);
+  }
+
+  .lf-node-resizer[data-resizer-position="n"],
+  .lf-node-resizer[data-resizer-position="s"] {
+    height: 10px;
+  }
+
+  .lf-node-resizer[data-resizer-position="e"],
+  .lf-node-resizer[data-resizer-position="w"] {
+    width: 10px;
+  }
+}
+
 /* ===== Handles ===== */
 .lf-handle {
   position: absolute;

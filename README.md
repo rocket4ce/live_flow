@@ -11,6 +11,7 @@ Build visual node editors, workflow builders, and interactive diagrams — simil
 - **Connections** — Source/target handles with live connection preview and validation
 - **Selection** — Click, Shift+click, and selection box (lasso) for multi-select
 - **Custom Nodes** — Function components or LiveComponents as custom node types
+- **Node Resizing** — Built-in `NodeResizer` component for interactive node resize with handles
 - **Edge Types** — Bezier, straight, step, and smoothstep paths with animated edges
 - **Edge Labels** — Inline-editable labels on edges (double-click to edit)
 - **Undo/Redo** — Snapshot-based history with configurable max entries
@@ -198,6 +199,33 @@ Pass custom node types to the Flow component:
   flow={@flow}
   node_types={%{custom: &my_custom_node/1}}
 />
+```
+
+## Node Resizing
+
+Add resize handles to custom nodes with the `NodeResizer` component:
+
+```elixir
+defp my_resizable_node(assigns) do
+  ~H"""
+  <div style="width: 100%; height: 100%; min-height: 80px; padding: 16px;">
+    <LiveFlow.Components.NodeResizer.node_resizer node_id={@node.id} min_width={120} min_height={60} />
+    <LiveFlow.Components.Handle.handle handle={LiveFlow.Handle.target(:left)} node_id={@node.id} />
+    <div>Resize me!</div>
+    <LiveFlow.Components.Handle.handle handle={LiveFlow.Handle.source(:right)} node_id={@node.id} />
+  </div>
+  """
+end
+```
+
+Create resizable nodes with the `resizable: true` option:
+
+```elixir
+Node.new("r1", %{x: 100, y: 100}, %{label: "Resizable"},
+  type: :resizable,
+  resizable: true,
+  handles: [Handle.target(:left), Handle.source(:right)]
+)
 ```
 
 ## Collaboration
