@@ -127,9 +127,11 @@ defmodule LiveFlow.Components.Flow do
     # Sort edges (selected edges on top)
     sorted_edges = sort_edges(flow.edges, flow.selected_edges)
 
-    # Apply viewport culling if virtualization is enabled
+    # Apply viewport culling if virtualization is enabled and flow is large enough
+    # Skip culling for small flows (< 200 nodes) to avoid unnecessary overhead
     {sorted_nodes, sorted_edges} =
-      if opts[:virtualization] && assigns.container_width && assigns.container_height do
+      if opts[:virtualization] && assigns.container_width && assigns.container_height &&
+           map_size(flow.nodes) >= 200 do
         {visible_nodes, visible_ids} =
           Culling.cull_nodes(sorted_nodes, flow.viewport, assigns.container_width, assigns.container_height)
 

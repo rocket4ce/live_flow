@@ -9,6 +9,7 @@ export class PanZoomManager {
     this.startY = 0;
     this.startViewport = null;
     this.lastPushTime = 0;
+    this.trailingTimer = null;
   }
 
   /**
@@ -179,14 +180,30 @@ export class PanZoomManager {
   }
 
   /**
-   * Throttled viewport push
+   * Throttled viewport push with trailing debounce.
+   * Pushes at most every 200ms during continuous interaction,
+   * then always sends the final state after interaction stops.
    */
   throttledPushViewport() {
     const now = Date.now();
-    if (now - this.lastPushTime >= 100) {
+
+    // Clear any pending trailing push
+    if (this.trailingTimer) {
+      clearTimeout(this.trailingTimer);
+      this.trailingTimer = null;
+    }
+
+    // Throttle: push immediately if enough time has passed
+    if (now - this.lastPushTime >= 200) {
       this.lastPushTime = now;
       this.hook.pushViewportChange();
     }
+
+    // Trailing: always send final state after interaction stops
+    this.trailingTimer = setTimeout(() => {
+      this.trailingTimer = null;
+      this.hook.pushViewportChange();
+    }, 250);
   }
 
   /**
@@ -198,5 +215,9 @@ export class PanZoomManager {
 
   destroy() {
     this.isPanning = false;
+    if (this.trailingTimer) {
+      clearTimeout(this.trailingTimer);
+      this.trailingTimer = null;
+    }
   }
 }
