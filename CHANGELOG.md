@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixes
+
+- **Edge endpoints respect `handle.style` offsets.** When a handle's inline `style` map carries a `left` or `top` percentage (used to spread multiple handles along a side), SVG edges now start/end at that visual position instead of the side's centre. Previously an edge drawn from a handle positioned via `style: %{"left" => "25%"}` would still depart from the node's horizontal centre, leaving a visible gap between the edge line and the handle circle.
+
 ## v0.2.3 (2026-02-20)
 
 ### Improvements
