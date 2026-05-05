@@ -196,8 +196,15 @@ defmodule LiveFlow.Components.Edge do
     handle = find_handle(node.handles, handle_id, type)
     handle_position = if handle, do: handle.position, else: default_handle_position(type)
 
-    # Calculate position based on node bounds and handle position
-    pos = calculate_handle_coords(node, handle_position)
+    # Calculate position based on node bounds and handle position,
+    # then offset the endpoint along the edge the handle sits on if
+    # the handle's inline style carries a left/top percentage (used
+    # when multiple handles share a side and are visually spread).
+    pos =
+      node
+      |> calculate_handle_coords(handle_position)
+      |> apply_handle_style_offset(handle, node, handle_position)
+
     {pos, handle_position}
   end
 
@@ -224,6 +231,41 @@ defmodule LiveFlow.Components.Edge do
       :right -> %{x: pos.x + w, y: pos.y + h / 2}
     end
   end
+
+  # For handles on top/bottom: read `style.left` percentage and shift x.
+  # For handles on left/right: read `style.top` percentage and shift y.
+  # Percentages are relative to the node's width / height respectively,
+  # matching how the browser positions the handle element itself.
+  defp apply_handle_style_offset(pos, nil, _node, _handle_position), do: pos
+
+  defp apply_handle_style_offset(pos, %Handle{style: style}, %Node{} = node, handle_position)
+       when handle_position in [:top, :bottom] do
+    case parse_percentage(Map.get(style, "left") || Map.get(style, :left)) do
+      nil -> pos
+      pct -> %{pos | x: node.position.x + (node.width || 100) * pct}
+    end
+  end
+
+  defp apply_handle_style_offset(pos, %Handle{style: style}, %Node{} = node, handle_position)
+       when handle_position in [:left, :right] do
+    case parse_percentage(Map.get(style, "top") || Map.get(style, :top)) do
+      nil -> pos
+      pct -> %{pos | y: node.position.y + (node.height || 40) * pct}
+    end
+  end
+
+  defp apply_handle_style_offset(pos, _handle, _node, _handle_position), do: pos
+
+  defp parse_percentage(nil), do: nil
+
+  defp parse_percentage(value) when is_binary(value) do
+    case Float.parse(String.trim_trailing(value, "%")) do
+      {pct, _} -> pct / 100
+      :error -> nil
+    end
+  end
+
+  defp parse_percentage(_), do: nil
 
   defp opposite_position(:left), do: :right
   defp opposite_position(:right), do: :left
