@@ -42,7 +42,8 @@ defmodule LiveFlow.MixProject do
       {:phoenix_html, "~> 4.0"},
       {:jason, "~> 1.2"},
       {:esbuild, "~> 0.10", only: :dev, runtime: false},
-      {:ex_doc, "~> 0.34", only: :dev, runtime: false}
+      {:ex_doc, "~> 0.34", only: :dev, runtime: false},
+      {:lazy_html, "~> 0.1", only: :test}
     ]
   end
 

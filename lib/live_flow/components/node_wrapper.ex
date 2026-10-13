@@ -36,6 +36,7 @@ defmodule LiveFlow.Components.NodeWrapper do
   @impl true
   def render(assigns) do
     node = assigns.node
+    node_changed = node_changed(assigns)
     type_renderer = Map.get(assigns.node_types, node.type)
     fallback_renderer = assigns.node_renderer
 
@@ -53,6 +54,7 @@ defmodule LiveFlow.Components.NodeWrapper do
       |> assign(:type_renderer, type_renderer)
       |> assign(:fallback_renderer, fallback_renderer)
       |> assign(:style, node_style(node))
+      |> assign(:node_changed, node_changed)
 
     ~H"""
     <div
@@ -113,11 +115,11 @@ defmodule LiveFlow.Components.NodeWrapper do
       <div class="lf-node-content">
         <%= case @renderer_type do %>
           <% :function -> %>
-            {render_function_node(@type_renderer, @node)}
+            {render_function_node(@type_renderer, @node, @node_changed)}
           <% :component -> %>
             <.live_component module={@type_renderer} id={"#{@id}-content"} node={@node} />
           <% :fallback -> %>
-            {render_function_node(@fallback_renderer, @node)}
+            {render_function_node(@fallback_renderer, @node, @node_changed)}
           <% :default -> %>
             <.default_node node={@node} />
         <% end %>
@@ -151,9 +153,24 @@ defmodule LiveFlow.Components.NodeWrapper do
     {:noreply, socket}
   end
 
-  defp render_function_node(renderer, node) do
-    renderer.(%{node: node, __changed__: %{}})
+  # Pass the function component the same change map `<.component node={@node}>`
+  # would: the old node when only the node changed, so its template re-sends
+  # just the fields that differ, and nil (render everything) otherwise. An
+  # empty map, as before, told the template nothing changed, so it never
+  # redrew.
+  defp render_function_node(renderer, node, node_changed) do
+    Phoenix.LiveView.TagEngine.component(
+      renderer,
+      %{node: node, __changed__: node_changed},
+      {__MODULE__, __ENV__.function, __ENV__.file, __ENV__.line}
+    )
   end
+
+  defp node_changed(%{__changed__: %{node: old_node} = changed})
+       when map_size(changed) == 1,
+       do: %{node: old_node}
+
+  defp node_changed(_assigns), do: nil
 
   defp node_style(%Node{position: pos, z_index: z, style: custom_style, dragging: dragging}) do
     base_style = [
