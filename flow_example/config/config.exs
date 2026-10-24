@@ -37,11 +37,15 @@ config :phoenix_live_view,
 config :flow_example, FlowExample.Mailer, adapter: Swoosh.Adapters.Local
 
 # Configure esbuild (the version is required)
+#
+# `live_flow` is a path dependency (it lives in the parent directory), so it is
+# not copied into deps/. The alias points `import ... from "live_flow"` at the
+# library sources, which is what `deps/live_flow` resolves to for Hex users.
 config :esbuild,
   version: "0.25.4",
   flow_example: [
     args:
-      ~w(js/app.js --bundle --target=es2022 --outdir=../priv/static/assets/js --external:/fonts/* --external:/images/* --alias:@=.),
+      ~w(js/app.js --bundle --target=es2022 --outdir=../priv/static/assets/js --external:/fonts/* --external:/images/* --alias:@=. --alias:live_flow=../../assets/js/live_flow/index.js),
     cd: Path.expand("../assets", __DIR__),
     env: %{"NODE_PATH" => [Path.expand("../deps", __DIR__), Mix.Project.build_path()]}
   ]

@@ -28,7 +28,11 @@ if config_env() == :dev do
   config :flow_example, FlowExampleWeb.Endpoint,
     live_reload: [
       web_console_logger: true,
+      # Also watch the LiveFlow library sources (parent directory)
+      dirs: ["", "../lib"],
       patterns: [
+        # LiveFlow library components
+        ~r"lib/live_flow/.*\.ex$"E,
         # Static assets, except user uploads
         ~r"priv/static/(?!uploads/).*\.(js|css|png|jpeg|jpg|gif|svg)$"E,
         # Gettext translations

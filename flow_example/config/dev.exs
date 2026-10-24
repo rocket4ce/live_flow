@@ -22,6 +22,8 @@ config :flow_example, FlowExampleWeb.Endpoint,
   http: [ip: {127, 0, 0, 1}],
   check_origin: false,
   code_reloader: true,
+  # Recompile the LiveFlow path dependency too, so library changes show up live
+  reloadable_apps: [:flow_example, :live_flow],
   debug_errors: true,
   secret_key_base: "2KK7UUrmREA00dw5Iq5nI3M/8i2g88+bff6WddmKQGRau/IVV/niJvxoWorLeRvg",
   watchers: [

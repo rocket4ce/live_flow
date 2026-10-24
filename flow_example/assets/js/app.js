@@ -25,12 +25,23 @@ import {LiveSocket} from "phoenix_live_view"
 import {hooks as colocatedHooks} from "phoenix-colocated/flow_example"
 import topbar from "../vendor/topbar"
 
+// LiveFlow - Interactive flow diagram library
+import {LiveFlowHook, FileImportHook, setupDownloadHandler} from "live_flow"
+
+// ELK auto-layout engine for LiveFlow (mix live_flow.gen.elk)
+import ELK from "../vendor/elk.bundled.cjs"
+import {registerElk} from "live_flow"
+registerElk(ELK)
+
 const csrfToken = document.querySelector("meta[name='csrf-token']").getAttribute("content")
 const liveSocket = new LiveSocket("/live", Socket, {
   longPollFallbackMs: 2500,
   params: {_csrf_token: csrfToken},
-  hooks: {...colocatedHooks},
+  hooks: {...colocatedHooks, LiveFlow: LiveFlowHook, FileImport: FileImportHook},
 })
+
+// Global handler for the "lf:download" event (JSON/SVG/PNG export)
+setupDownloadHandler(liveSocket)
 
 // Show progress bar on live navigation and form submits
 topbar.config({barColors: {0: "#29d"}, shadowColor: "rgba(0, 0, 0, .3)"})

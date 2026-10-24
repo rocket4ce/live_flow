@@ -86,6 +86,8 @@ defmodule FlowExampleWeb do
       import Phoenix.HTML
       # Core UI components
       import FlowExampleWeb.CoreComponents
+      # Showcase building blocks (canvas layout, option groups, event log)
+      import FlowExampleWeb.Showcase
 
       # Common modules used in templates
       alias Phoenix.LiveView.JS

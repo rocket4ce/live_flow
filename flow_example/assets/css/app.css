@@ -103,3 +103,36 @@
 [data-phx-session], [data-phx-teleported-src] { display: contents }
 
 /* This file is for your main application CSS */
+
+/* LiveFlow stylesheet. The library lives in the parent directory of this app,
+   Hex users import "../../deps/live_flow/assets/css/live_flow.css" instead. */
+@import "../../../assets/css/live_flow.css";
+@source "../../../lib/live_flow";
+
+/* LiveFlow theme plugin (Tailwind v4). One block per theme exposed in the
+   showcase theme picker. Add your own with custom --lf-* variables. */
+@plugin "../../../assets/js/live_flow/liveflow-theme" { name: "light"; default: true; }
+@plugin "../../../assets/js/live_flow/liveflow-theme" { name: "dark"; }
+@plugin "../../../assets/js/live_flow/liveflow-theme" { name: "ocean"; }
+@plugin "../../../assets/js/live_flow/liveflow-theme" { name: "forest"; }
+@plugin "../../../assets/js/live_flow/liveflow-theme" { name: "sunset"; }
+@plugin "../../../assets/js/live_flow/liveflow-theme" { name: "synthwave"; }
+@plugin "../../../assets/js/live_flow/liveflow-theme" { name: "nord"; }
+@plugin "../../../assets/js/live_flow/liveflow-theme" { name: "dracula"; }
+@plugin "../../../assets/js/live_flow/liveflow-theme" { name: "cyberpunk"; }
+@plugin "../../../assets/js/live_flow/liveflow-theme" { name: "coffee"; }
+
+/* ===== Showcase ===== */
+
+/* Passive dashed area used to visualize the node_extent option */
+.lf-node.lf-extent-area {
+  pointer-events: none;
+  background: color-mix(in oklab, var(--lf-node-selected-border) 4%, transparent);
+  border: 1.5px dashed color-mix(in oklab, var(--lf-node-selected-border) 55%, transparent);
+  box-shadow: none;
+}
+
+.lf-node.lf-extent-area .lf-node-content {
+  height: 100%;
+  padding: 0;
+}

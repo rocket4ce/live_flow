@@ -12,8 +12,9 @@ defmodule FlowExample.Application do
       FlowExample.Repo,
       {DNSCluster, query: Application.get_env(:flow_example, :dns_cluster_query) || :ignore},
       {Phoenix.PubSub, name: FlowExample.PubSub},
-      # Start a worker by calling: FlowExample.Worker.start_link(arg)
-      # {FlowExample.Worker, arg},
+      # Shared state and presence of the collaborative example
+      FlowExample.FlowStore,
+      FlowExampleWeb.Presence,
       # Start to serve requests, typically the last entry
       FlowExampleWeb.Endpoint
     ]

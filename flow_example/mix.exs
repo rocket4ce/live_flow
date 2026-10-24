@@ -41,6 +41,8 @@ defmodule FlowExample.MixProject do
   defp deps do
     [
       {:tidewave, "~> 0.9", only: :dev},
+      # The library this app showcases, loaded from the parent directory
+      {:live_flow, path: ".."},
       {:phoenix, "~> 1.8.9"},
       {:phoenix_ecto, "~> 4.5"},
       {:ecto_sql, "~> 3.13"},

@@ -17,7 +17,23 @@ defmodule FlowExampleWeb.Router do
   scope "/", FlowExampleWeb do
     pipe_through :browser
 
-    get "/", PageController, :home
+    live "/", HomeLive
+    live "/playground", PlaygroundLive
+    live "/interaction", InteractionLive
+    live "/edges", EdgesLive
+    live "/resizing", ResizingLive
+    live "/custom-nodes", CustomNodesLive
+    live "/large", LargeLive
+    live "/examples", ExamplesLive
+  end
+
+  # React Flow examples (generated from FlowExampleWeb.Examples)
+  scope "/" do
+    pipe_through :browser
+
+    for example <- FlowExampleWeb.Examples.routed() do
+      live example.path, example.module
+    end
   end
 
   # Other scopes may use custom stacks.
