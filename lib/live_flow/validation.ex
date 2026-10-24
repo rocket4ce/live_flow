@@ -31,7 +31,7 @@ defmodule LiveFlow.Validation do
     * `:strict` — default + handles valid + connectable check
   """
 
-  alias LiveFlow.{State, Handle}
+  alias LiveFlow.{Edge, State, Handle}
 
   @type conn_params :: %{
           source: String.t(),
@@ -77,8 +77,13 @@ defmodule LiveFlow.Validation do
   """
   @spec no_duplicate_edges(State.t(), conn_params()) :: :ok | {:error, String.t()}
   def no_duplicate_edges(flow, params) do
-    if State.edge_exists?(flow, params.source, params.target,
-         params.source_handle, params.target_handle) do
+    if State.edge_exists?(
+         flow,
+         params.source,
+         params.target,
+         params.source_handle,
+         params.target_handle
+       ) do
       {:error, "Connection already exists"}
     else
       :ok
@@ -149,29 +154,31 @@ defmodule LiveFlow.Validation do
   ## Options
 
     * `:max` - Maximum connections per handle (required)
+    * `:side` - Which end is limited: `:source`, `:target` or `:both` (default: `:both`)
   """
   @spec max_connections(State.t(), conn_params(), keyword()) :: :ok | {:error, String.t()}
   def max_connections(flow, params, opts) do
     max = Keyword.fetch!(opts, :max)
+    side = Keyword.get(opts, :side, :both)
     edges = Map.values(flow.edges)
 
     source_count =
       Enum.count(edges, fn e ->
         e.source == params.source and
-          (is_nil(params.source_handle) or e.source_handle == params.source_handle)
+          (is_nil(params.source_handle) or Edge.effective_source_handle(e) == params.source_handle)
       end)
 
     target_count =
       Enum.count(edges, fn e ->
         e.target == params.target and
-          (is_nil(params.target_handle) or e.target_handle == params.target_handle)
+          (is_nil(params.target_handle) or Edge.effective_target_handle(e) == params.target_handle)
       end)
 
     cond do
-      source_count >= max ->
+      side in [:both, :source] and source_count >= max ->
         {:error, "Source handle already has #{max} connection(s)"}
 
-      target_count >= max ->
+      side in [:both, :target] and target_count >= max ->
         {:error, "Target handle already has #{max} connection(s)"}
 
       true ->
@@ -218,7 +225,8 @@ defmodule LiveFlow.Validation do
         {:error, "Handle '#{handle_id || expected_type}' not found on node '#{node.id}'"}
 
       not handle.connectable ->
-        {:error, "Handle '#{Handle.effective_id(handle)}' on node '#{node.id}' is not connectable"}
+        {:error,
+         "Handle '#{Handle.effective_id(handle)}' on node '#{node.id}' is not connectable"}
 
       true ->
         :ok

@@ -247,4 +247,37 @@ defmodule LiveFlow.ClipboardTest do
       assert String.contains?(pasted_edge.target, "copy")
     end
   end
+
+  describe "paste/3 with :position" do
+    test "places the top-left corner of the pasted nodes at the position" do
+      flow =
+        setup_flow()
+        |> State.select_node("n2", multi: true)
+        |> State.select_node("n3", multi: true)
+
+      cb = Clipboard.copy(Clipboard.new(), flow)
+      {:ok, flow, cb} = Clipboard.paste(cb, flow, position: %{"x" => 500, "y" => 300})
+
+      pasted = Enum.map(flow.selected_nodes, &State.get_node(flow, &1))
+
+      assert pasted |> Enum.map(&{&1.position.x, &1.position.y}) |> Enum.sort() ==
+               [{500, 300}, {600, 300}]
+
+      # The paste count still grows, so a paste without position keeps offsetting
+      assert cb.paste_count == 1
+    end
+
+    test "accepts atom keys and falls back to the offset without a position" do
+      flow = State.select_node(setup_flow(), "n1")
+      cb = Clipboard.copy(Clipboard.new(), flow)
+
+      {:ok, at, _cb} = Clipboard.paste(cb, flow, position: %{x: -40, y: 20})
+      [id] = MapSet.to_list(at.selected_nodes)
+      assert State.get_node(at, id).position == %{x: -40, y: 20}
+
+      {:ok, offset, _cb} = Clipboard.paste(cb, flow, position: nil)
+      [id] = MapSet.to_list(offset.selected_nodes)
+      assert State.get_node(offset, id).position == %{x: 50, y: 50}
+    end
+  end
 end

@@ -40,7 +40,12 @@ defmodule LiveFlow.Viewport.Culling do
   to preload nodes just outside the viewport for smooth panning.
   """
   @spec visible_rect(Viewport.t(), number(), number(), number()) :: map()
-  def visible_rect(%Viewport{x: vx, y: vy, zoom: zoom}, container_w, container_h, margin \\ @default_margin) do
+  def visible_rect(
+        %Viewport{x: vx, y: vy, zoom: zoom},
+        container_w,
+        container_h,
+        margin \\ @default_margin
+      ) do
     zoom = max(zoom, 0.01)
 
     %{

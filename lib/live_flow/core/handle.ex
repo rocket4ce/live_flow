@@ -12,6 +12,8 @@ defmodule LiveFlow.Handle do
     * `:position` - Position on the node: `:top`, `:bottom`, `:left`, `:right`
     * `:connectable` - Whether this handle accepts connections
     * `:connect_type` - Optional type constraint atom (e.g., `:data`, `:control`)
+    * `:offset` - Where the handle sits along its side, from `0.0` (top/left)
+      to `1.0` (bottom/right); edges attach there (default: `0.5`, the center)
     * `:style` - Custom inline styles
     * `:class` - Custom CSS classes
 
@@ -30,6 +32,7 @@ defmodule LiveFlow.Handle do
           position: :top | :bottom | :left | :right,
           connectable: boolean(),
           connect_type: atom() | nil,
+          offset: number() | nil,
           style: map(),
           class: String.t() | nil
         }
@@ -38,6 +41,7 @@ defmodule LiveFlow.Handle do
     :id,
     :class,
     :connect_type,
+    :offset,
     type: :source,
     position: :bottom,
     connectable: true,
@@ -52,6 +56,7 @@ defmodule LiveFlow.Handle do
     * `:id` - Handle ID (default: `nil`, will use type as identifier)
     * `:connectable` - Whether connectable (default: `true`)
     * `:connect_type` - Type constraint atom for validation (default: `nil`)
+    * `:offset` - Position along the side, `0.0`..`1.0` (default: `0.5`)
     * `:style` - Custom inline styles
     * `:class` - Custom CSS classes
 
@@ -71,6 +76,7 @@ defmodule LiveFlow.Handle do
       position: position,
       connectable: Keyword.get(opts, :connectable, true),
       connect_type: Keyword.get(opts, :connect_type),
+      offset: Keyword.get(opts, :offset),
       style: Keyword.get(opts, :style, %{}),
       class: Keyword.get(opts, :class)
     }

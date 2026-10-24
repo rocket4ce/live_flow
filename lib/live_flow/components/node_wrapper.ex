@@ -29,6 +29,7 @@ defmodule LiveFlow.Components.NodeWrapper do
       |> assign(assigns)
       |> assign_new(:node_types, fn -> %{} end)
       |> assign_new(:node_renderer, fn -> nil end)
+      |> assign_new(:z, fn -> nil end)
 
     {:ok, socket}
   end
@@ -52,7 +53,7 @@ defmodule LiveFlow.Components.NodeWrapper do
       |> assign(:renderer_type, renderer_type)
       |> assign(:type_renderer, type_renderer)
       |> assign(:fallback_renderer, fallback_renderer)
-      |> assign(:style, node_style(node))
+      |> assign(:style, node_style(node, assigns.z))
 
     ~H"""
     <div
@@ -64,13 +65,17 @@ defmodule LiveFlow.Components.NodeWrapper do
       ]}
       data-node-id={@node.id}
       data-node-type={@node.type}
-      data-selected={@node.selected}
-      data-draggable={@node.draggable}
-      data-connectable={@node.connectable}
-      data-selectable={@node.selectable}
-      data-dragging={@node.dragging}
-      data-resizable={@node.resizable}
-      data-resizing={@node.resizing}
+      data-selected={to_string(@node.selected)}
+      data-draggable={to_string(@node.draggable)}
+      data-connectable={to_string(@node.connectable)}
+      data-selectable={to_string(@node.selectable)}
+      data-deletable={to_string(@node.deletable)}
+      data-dragging={to_string(@node.dragging)}
+      data-resizable={to_string(@node.resizable)}
+      data-resizing={to_string(@node.resizing)}
+      data-drag-handle={@node.drag_handle}
+      data-parent-id={@node.parent_id}
+      data-extent={@node.parent_id && extent_attr(@node.extent)}
       style={@style}
       phx-click="lf:node_click"
       phx-value-node-id={@node.id}
@@ -153,12 +158,24 @@ defmodule LiveFlow.Components.NodeWrapper do
     {:noreply, socket}
   end
 
+  # `__changed__: nil` disables change tracking for the custom node, so its
+  # whole content is re-rendered whenever the node changes. With an empty map
+  # LiveView considered every assign unchanged and the node never updated.
   defp render_function_node(renderer, node) do
-    renderer.(%{node: node, __changed__: %{}})
+    renderer.(%{node: node, __changed__: nil})
   end
 
-  defp node_style(%Node{} = node) do
-    %{position: pos, z_index: z, style: custom_style, dragging: dragging} = node
+  # Extent relative to the parent, read by the hook while dragging
+  defp extent_attr(:parent), do: "parent"
+  defp extent_attr({{x1, y1}, {x2, y2}}), do: Jason.encode!([[x1, y1], [x2, y2]])
+  defp extent_attr(_), do: nil
+
+  # `z` is the node's place in the render order computed by the Flow
+  # component (z_index, selection elevation, sub-flow hierarchy), so the CSS
+  # stacking matches it
+  defp node_style(%Node{} = node, z) do
+    %{position: pos, style: custom_style, dragging: dragging} = node
+    z = z || node.z_index
 
     base_style = [
       "left: #{pos.x}px",

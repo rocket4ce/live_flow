@@ -8,8 +8,8 @@ defmodule LiveFlow.Components.Edge do
 
   use Phoenix.Component
 
-  alias LiveFlow.{Edge, Node, Handle}
-  alias LiveFlow.Paths.Path
+  alias LiveFlow.{Edge, Node}
+  alias LiveFlow.Paths.{Geometry, Path}
 
   @doc """
   Renders an edge between two nodes.
@@ -38,28 +38,15 @@ defmodule LiveFlow.Components.Edge do
     source_node = assigns.source_node
     target_node = assigns.target_node
 
-    # Calculate handle positions
-    {source_pos, source_handle_position} =
-      get_handle_position(source_node, target_node, edge.source_handle, :source, edge)
+    geometry = Geometry.edge_path(edge, source_node, target_node)
 
-    {target_pos, target_handle_position} =
-      get_handle_position(target_node, source_node, edge.target_handle, :target, edge)
+    {path_result, source_pos, target_pos, path_type} =
+      case geometry do
+        nil ->
+          {%{path: "", label_x: 0, label_y: 0}, nil, nil, Geometry.base_path_type(edge.type)}
 
-    # Calculate path using the base type for path computation
-    # Custom edges can specify path_options: %{base_type: :smoothstep} to override
-    path_type = Map.get(edge.path_options, :base_type, base_path_type(edge.type))
-    path_module = Path.module_for_type(path_type)
-
-    path_result =
-      if source_pos && target_pos do
-        Path.calculate(
-          path_module,
-          %{x: source_pos.x, y: source_pos.y, position: source_handle_position},
-          %{x: target_pos.x, y: target_pos.y, position: target_handle_position},
-          Map.to_list(edge.path_options)
-        )
-      else
-        %{path: "", label_x: 0, label_y: 0}
+        g ->
+          {g, Map.take(g.source, [:x, :y]), Map.take(g.target, [:x, :y]), g.path_type}
       end
 
     # Check for custom edge renderer
@@ -75,6 +62,10 @@ defmodule LiveFlow.Components.Edge do
       |> assign(:marker_start_id, marker_id(edge.marker_start))
       |> assign(:marker_end_id, marker_id(edge.marker_end))
       |> assign(:custom_renderer, custom_renderer)
+      |> assign(:path_type, path_type)
+      |> assign(:source_position, geometry && geometry.source.position)
+      |> assign(:target_position, geometry && geometry.target.position)
+      |> assign(:path_options_json, path_options_json(edge.path_options))
 
     if custom_renderer && is_function(custom_renderer, 1) do
       render_custom_edge(custom_renderer, assigns)
@@ -84,19 +75,8 @@ defmodule LiveFlow.Components.Edge do
   end
 
   defp render_custom_edge(renderer, assigns) do
-    # Mark all keys as changed so LiveView always diffs custom edge output.
-    # Edge paths are server-computed and must update when nodes move.
-    changed_keys = %{
-      edge: true,
-      path: true,
-      label_x: true,
-      label_y: true,
-      source_pos: true,
-      target_pos: true,
-      marker_start_id: true,
-      marker_end_id: true
-    }
-
+    # `__changed__: nil` disables change tracking: custom edges always diff
+    # (their paths are server-computed and change when nodes move)
     renderer.(%{
       edge: assigns.edge,
       path: assigns.path,
@@ -104,9 +84,13 @@ defmodule LiveFlow.Components.Edge do
       label_y: assigns.label_y,
       source_pos: assigns.source_pos,
       target_pos: assigns.target_pos,
+      source_position: assigns.source_position,
+      target_position: assigns.target_position,
+      path_type: assigns.path_type,
+      path_options_json: assigns.path_options_json,
       marker_start_id: assigns.marker_start_id,
       marker_end_id: assigns.marker_end_id,
-      __changed__: changed_keys
+      __changed__: nil
     })
   end
 
@@ -125,6 +109,10 @@ defmodule LiveFlow.Components.Edge do
       data-target={@edge.target}
       data-source-handle={@edge.source_handle}
       data-target-handle={@edge.target_handle}
+      data-source-floating={Map.get(@edge, :source_floating, false) && "true"}
+      data-target-floating={Map.get(@edge, :target_floating, false) && "true"}
+      data-path-type={@path_type}
+      data-path-options={@path_options_json}
     >
       <%!-- Invisible wider path for easier selection --%>
       <path
@@ -232,9 +220,9 @@ defmodule LiveFlow.Components.Edge do
           </div>
         </foreignObject>
       <% end %>
-      <%!-- Reconnect handles at endpoints (shown when selected + reconnectable) --%>
+      <%!-- Reconnect handles at the endpoints of reconnectable edges (visible on hover/selection) --%>
       <circle
-        :if={@edge.selected and Map.get(@edge, :reconnectable, false) and @source_pos}
+        :if={Map.get(@edge, :reconnectable, false) and @source_pos}
         cx={@source_pos.x}
         cy={@source_pos.y}
         r="6"
@@ -243,7 +231,7 @@ defmodule LiveFlow.Components.Edge do
         data-reconnect-end="source"
       />
       <circle
-        :if={@edge.selected and Map.get(@edge, :reconnectable, false) and @target_pos}
+        :if={Map.get(@edge, :reconnectable, false) and @target_pos}
         cx={@target_pos.x}
         cy={@target_pos.y}
         r="6"
@@ -285,124 +273,21 @@ defmodule LiveFlow.Components.Edge do
     """
   end
 
+  # `__changed__: nil` re-renders custom labels/toolbars whenever the edge
+  # changes (an empty map marked every assign as unchanged)
   defp render_label(renderer, edge, label_x, label_y) do
-    renderer.(%{edge: edge, x: label_x, y: label_y, __changed__: %{}})
+    renderer.(%{edge: edge, x: label_x, y: label_y, __changed__: nil})
   end
 
   defp render_toolbar(renderer, edge, label_x, label_y) do
-    renderer.(%{edge: edge, x: label_x, y: label_y, __changed__: %{}})
+    renderer.(%{edge: edge, x: label_x, y: label_y, __changed__: nil})
   end
 
-  # Map custom edge types to their base path type for path computation
-  # Built-in types return themselves; custom types default to :bezier
-  defp base_path_type(type) when type in [:bezier, :straight, :step, :smoothstep], do: type
-  defp base_path_type(_custom_type), do: :bezier
-
-  # Get the position of a handle on a node, with floating edge support
-  defp get_handle_position(%Node{} = node, other_node, handle_id, type, edge) do
-    floating =
-      case type do
-        :source -> Map.get(edge, :source_floating, false)
-        :target -> Map.get(edge, :target_floating, false)
-      end
-
-    if floating do
-      get_floating_position(node, other_node)
-    else
-      get_fixed_handle_position(node, handle_id, type)
-    end
-  end
-
-  defp get_fixed_handle_position(%Node{} = node, handle_id, type) do
-    # Find the handle
-    handle = find_handle(node.handles, handle_id, type)
-    handle_position = if handle, do: handle.position, else: default_handle_position(type)
-
-    # Calculate position based on node bounds and handle position
-    pos = calculate_handle_coords(node, handle_position)
-    {pos, handle_position}
-  end
-
-  defp get_floating_position(%Node{} = node, %Node{} = other_node) do
-    # Calculate the nearest boundary point on node facing other_node's center
-    nw = node.width || 100
-    nh = node.height || 40
-    ow = other_node.width || 100
-    oh = other_node.height || 40
-
-    # Node center
-    ncx = node.position.x + nw / 2
-    ncy = node.position.y + nh / 2
-    # Other node center
-    ocx = other_node.position.x + ow / 2
-    ocy = other_node.position.y + oh / 2
-
-    # Direction vector from this node's center to other node's center
-    dx = ocx - ncx
-    dy = ocy - ncy
-
-    # Determine which side of the rectangle to use
-    # by checking the angle of the direction vector
-    if abs(dx) < 0.001 and abs(dy) < 0.001 do
-      # Nodes overlap, use default right position
-      {%{x: node.position.x + nw, y: ncy}, :right}
-    else
-      # Check intersection with each side
-      half_w = nw / 2
-      half_h = nh / 2
-
-      # Time to hit each edge (parametric)
-      t_right = if dx > 0, do: half_w / dx, else: :infinity
-      t_left = if dx < 0, do: -half_w / dx, else: :infinity
-      t_bottom = if dy > 0, do: half_h / dy, else: :infinity
-      t_top = if dy < 0, do: -half_h / dy, else: :infinity
-
-      # Find minimum positive t
-      candidates = [
-        {t_right, :right},
-        {t_left, :left},
-        {t_bottom, :bottom},
-        {t_top, :top}
-      ]
-
-      {t, side} =
-        candidates
-        |> Enum.reject(fn {t, _} -> t == :infinity end)
-        |> Enum.min_by(fn {t, _} -> t end, fn -> {1.0, :right} end)
-
-      # Clamp the intersection point to node boundaries
-      ix = ncx + dx * t
-      iy = ncy + dy * t
-
-      ix = max(node.position.x, min(ix, node.position.x + nw))
-      iy = max(node.position.y, min(iy, node.position.y + nh))
-
-      {%{x: ix, y: iy}, side}
-    end
-  end
-
-  defp find_handle(handles, nil, type) do
-    # No specific handle, find first of matching type
-    Enum.find(handles, fn h -> h.type == type end)
-  end
-
-  defp find_handle(handles, handle_id, _type) do
-    Enum.find(handles, fn h -> Handle.effective_id(h) == handle_id end)
-  end
-
-  defp default_handle_position(:source), do: :right
-  defp default_handle_position(:target), do: :left
-
-  defp calculate_handle_coords(%Node{position: pos, width: w, height: h}, handle_position) do
-    w = w || 100
-    h = h || 40
-
-    case handle_position do
-      :top -> %{x: pos.x + w / 2, y: pos.y}
-      :bottom -> %{x: pos.x + w / 2, y: pos.y + h}
-      :left -> %{x: pos.x, y: pos.y + h / 2}
-      :right -> %{x: pos.x + w, y: pos.y + h / 2}
-    end
+  # Path options are mirrored to the client so it can redraw the edge with the
+  # same algorithm while nodes move (see assets/js/live_flow/utils/edge_updater.js)
+  defp path_options_json(options) do
+    options = Map.delete(options, :base_type)
+    if map_size(options) == 0, do: nil, else: Jason.encode!(options)
   end
 
   defp opposite_position(:left), do: :right

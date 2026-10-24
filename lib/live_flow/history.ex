@@ -84,9 +84,10 @@ defmodule LiveFlow.History do
     current_snapshot = take_snapshot(current_flow)
     restored = restore_flow(current_flow, snapshot)
 
-    updated_history = %{history |
-      undo_stack: rest,
-      redo_stack: [current_snapshot | history.redo_stack]
+    updated_history = %{
+      history
+      | undo_stack: rest,
+        redo_stack: [current_snapshot | history.redo_stack]
     }
 
     {:ok, restored, updated_history}
@@ -105,9 +106,10 @@ defmodule LiveFlow.History do
     current_snapshot = take_snapshot(current_flow)
     restored = restore_flow(current_flow, snapshot)
 
-    updated_history = %{history |
-      undo_stack: [current_snapshot | history.undo_stack],
-      redo_stack: rest
+    updated_history = %{
+      history
+      | undo_stack: [current_snapshot | history.undo_stack],
+        redo_stack: rest
     }
 
     {:ok, restored, updated_history}
@@ -148,15 +150,17 @@ defmodule LiveFlow.History do
             {id, node}
 
           current ->
-            {id, %{node | width: current.width, height: current.height, measured: current.measured}}
+            {id,
+             %{node | width: current.width, height: current.height, measured: current.measured}}
         end
       end)
 
-    %{current_flow |
-      nodes: nodes,
-      edges: snapshot.edges,
-      selected_nodes: MapSet.new(),
-      selected_edges: MapSet.new()
+    %{
+      current_flow
+      | nodes: nodes,
+        edges: snapshot.edges,
+        selected_nodes: MapSet.new(),
+        selected_edges: MapSet.new()
     }
   end
 end

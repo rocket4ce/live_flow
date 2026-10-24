@@ -41,6 +41,15 @@ defmodule LiveFlow.Validation.Connection do
 
     * `:validators` — list of validator functions (default: `Validation.preset(:default)`)
     * `:edge_opts` — extra options passed to `Edge.new/4`
+    * `:edge_id` — edge ID: a string, or a function receiving the connection
+      (`%{source:, target:, source_handle:, target_handle:}`) and returning one.
+      Defaults to a unique `"e-<integer>"` ID.
+
+  ## Examples
+
+      validate_and_create(flow, params,
+        edge_id: fn conn -> "\#{conn.source}->\#{conn.target}" end
+      )
   """
   @spec validate_and_create(LiveFlow.State.t(), map(), keyword()) ::
           {:ok, Edge.t()} | {:error, String.t()}
@@ -56,7 +65,7 @@ defmodule LiveFlow.Validation.Connection do
     if source && target && source != target do
       case Validation.validate(flow, conn_params, validators) do
         :ok ->
-          edge_id = "e-#{System.unique_integer([:positive])}"
+          edge_id = build_edge_id(Keyword.get(opts, :edge_id), conn_params)
 
           edge =
             Edge.new(
@@ -78,6 +87,11 @@ defmodule LiveFlow.Validation.Connection do
       {:error, "Invalid source or target"}
     end
   end
+
+  @doc false
+  def build_edge_id(nil, _connection), do: "e-#{System.unique_integer([:positive])}"
+  def build_edge_id(id, _connection) when is_binary(id), do: id
+  def build_edge_id(fun, connection) when is_function(fun, 1), do: to_string(fun.(connection))
 
   defp normalize_params(%{} = params) do
     %{

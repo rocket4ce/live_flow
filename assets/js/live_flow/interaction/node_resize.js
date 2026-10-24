@@ -1,19 +1,25 @@
 /**
  * Node resize manager for LiveFlow
  *
- * Handles interactive resizing of nodes via resize handles.
- * Like drag, width/height are updated client-side during resize
- * for zero-latency feedback. Only the final dimensions are pushed
- * to the server in endResize().
+ * Handles interactive resizing of nodes via resize handles. Like drag,
+ * width/height are updated client-side during resize for zero-latency
+ * feedback.
+ *
+ * Server notifications mirror xyflow's onResizeStart/onResizeEnd: a `resize`
+ * change with `resizing: true` is pushed when the pointer first moves, and
+ * it is always followed by a final `resize` change with `resizing: false`
+ * (on pointer up, and also when the resize is aborted).
  */
-import { calculateBezierPath } from '../utils/paths.js';
+
+const clamp = (value, min, max) => Math.min(Math.max(value, min), max);
 
 export class NodeResizeManager {
   constructor(hook) {
     this.hook = hook;
-    this.resizingNode = null; // { nodeId, handlePosition, startMouseX, startMouseY, startWidth, startHeight, startPosX, startPosY, element, minWidth, minHeight }
+    this.resizingNode = null;
     this.clientDimensions = new Map(); // nodeId -> { width, height, x, y }
     this.affectedEdges = [];
+    this._pendingClear = false;
   }
 
   isResizing() {
@@ -21,14 +27,12 @@ export class NodeResizeManager {
   }
 
   startResize(nodeId, handlePosition, event) {
-    const nodeEl = this.hook.nodeLayer.querySelector(`[data-node-id="${nodeId}"]`);
+    const nodeEl = this.hook.nodeEl(nodeId);
     if (!nodeEl) return false;
 
     const [flowX, flowY] = this.hook.coords.eventToFlow(event);
-
     const resizerEl = event.target.closest('.lf-node-resizer');
-    const minWidth = parseFloat(resizerEl?.dataset.minWidth) || 50;
-    const minHeight = parseFloat(resizerEl?.dataset.minHeight) || 30;
+    const data = resizerEl?.dataset || {};
 
     this.resizingNode = {
       nodeId,
@@ -40,104 +44,169 @@ export class NodeResizeManager {
       startPosX: parseFloat(nodeEl.style.left) || 0,
       startPosY: parseFloat(nodeEl.style.top) || 0,
       element: nodeEl,
-      minWidth,
-      minHeight
+      minWidth: parseFloat(data.minWidth) || 10,
+      minHeight: parseFloat(data.minHeight) || 10,
+      maxWidth: parseFloat(data.maxWidth) || Infinity,
+      maxHeight: parseFloat(data.maxHeight) || Infinity,
+      keepAspectRatio: data.keepAspectRatio === 'true',
+      started: false,
     };
 
     nodeEl.dataset.resizing = 'true';
-
-    this.cacheAffectedEdges();
+    this.affectedEdges = this.hook.edges.collect(new Set([nodeId]));
 
     return true;
   }
 
   moveResize(event) {
-    if (!this.resizingNode) return;
+    const r = this.resizingNode;
+    if (!r) return;
 
+    const { width, height, x, y } = this.computeDimensions(event);
+
+    if (!r.started) {
+      if (width === r.startWidth && height === r.startHeight) return;
+      r.started = true;
+      this.pushResize(r.startWidth, r.startHeight, r.startPosX, r.startPosY, true);
+    }
+
+    r.element.style.width = `${width}px`;
+    r.element.style.height = `${height}px`;
+    r.element.style.left = `${x}px`;
+    r.element.style.top = `${y}px`;
+
+    // Track for DOM patch recovery and edge updates
+    this.clientDimensions.set(r.nodeId, { width, height, x, y });
+    this.hook.edges.update(this.affectedEdges, this.clientDimensions);
+  }
+
+  computeDimensions(event) {
     const r = this.resizingNode;
     const [flowX, flowY] = this.hook.coords.eventToFlow(event);
     const dx = flowX - r.startMouseX;
     const dy = flowY - r.startMouseY;
-
-    let newWidth = r.startWidth;
-    let newHeight = r.startHeight;
-    let newX = r.startPosX;
-    let newY = r.startPosY;
-
     const pos = r.handlePosition;
 
-    // East side: expand width
-    if (pos === 'e' || pos === 'ne' || pos === 'se') {
-      newWidth = Math.max(r.minWidth, r.startWidth + dx);
+    const east = pos.includes('e');
+    const west = pos.includes('w');
+    const south = pos.includes('s');
+    const north = pos.includes('n');
+
+    let width = r.startWidth + (east ? dx : west ? -dx : 0);
+    let height = r.startHeight + (south ? dy : north ? -dy : 0);
+
+    const { snapToGrid, snapGridX, snapGridY } = this.hook.config;
+    if (snapToGrid) {
+      const right = r.startPosX + r.startWidth;
+      const bottom = r.startPosY + r.startHeight;
+      if (east) width = Math.round((r.startPosX + width) / snapGridX) * snapGridX - r.startPosX;
+      if (west) width = right - Math.round((right - width) / snapGridX) * snapGridX;
+      if (south) height = Math.round((r.startPosY + height) / snapGridY) * snapGridY - r.startPosY;
+      if (north) height = bottom - Math.round((bottom - height) / snapGridY) * snapGridY;
     }
 
-    // West side: expand width, shift position
-    if (pos === 'w' || pos === 'nw' || pos === 'sw') {
-      const maxDx = r.startWidth - r.minWidth;
-      const clampedDx = Math.min(dx, maxDx);
-      newWidth = r.startWidth - clampedDx;
-      newX = r.startPosX + clampedDx;
-    }
-
-    // South side: expand height
-    if (pos === 's' || pos === 'se' || pos === 'sw') {
-      newHeight = Math.max(r.minHeight, r.startHeight + dy);
-    }
-
-    // North side: expand height, shift position
-    if (pos === 'n' || pos === 'ne' || pos === 'nw') {
-      const maxDy = r.startHeight - r.minHeight;
-      const clampedDy = Math.min(dy, maxDy);
-      newHeight = r.startHeight - clampedDy;
-      newY = r.startPosY + clampedDy;
-    }
-
-    // Apply CSS immediately
-    r.element.style.width = `${newWidth}px`;
-    r.element.style.height = `${newHeight}px`;
-    r.element.style.left = `${newX}px`;
-    r.element.style.top = `${newY}px`;
-
-    // Track for DOM patch recovery
-    this.clientDimensions.set(r.nodeId, { width: newWidth, height: newHeight, x: newX, y: newY });
-
-    // Update connected edge paths
-    this.updateEdgePaths();
-  }
-
-  endResize() {
-    if (!this.resizingNode) return;
-
-    const r = this.resizingNode;
-    r.element.dataset.resizing = 'false';
-
-    const dims = this.clientDimensions.get(r.nodeId);
-    if (dims) {
-      const changes = [{
-        type: 'resize',
-        id: r.nodeId,
-        width: dims.width,
-        height: dims.height,
-        position: { x: dims.x, y: dims.y },
-        resizing: false
-      }];
-      this.hook.pushNodeChange(changes);
-
-      // Update the measured nodes cache so ResizeObserver doesn't
-      // send stale dimensions that would overwrite the resize
-      if (this.hook._measuredNodes) {
-        this.hook._measuredNodes.set(r.nodeId, {
-          w: Math.round(dims.width),
-          h: Math.round(dims.height)
-        });
+    // Size constraints
+    const ratio = r.startWidth / (r.startHeight || 1);
+    if (r.keepAspectRatio) {
+      const horizontal = east || west;
+      const vertical = north || south;
+      const followWidth = horizontal && (!vertical ||
+        Math.abs(width - r.startWidth) / r.startWidth >= Math.abs(height - r.startHeight) / r.startHeight);
+      if (followWidth) {
+        height = width / ratio;
+      } else {
+        width = height * ratio;
       }
     }
 
+    width = clamp(width, r.minWidth, r.maxWidth);
+    height = clamp(height, r.minHeight, r.maxHeight);
+    if (r.keepAspectRatio) {
+      // Re-apply the ratio after clamping, without breaking the limits again
+      if (width / height > ratio) width = clamp(height * ratio, r.minWidth, r.maxWidth);
+      else height = clamp(width / ratio, r.minHeight, r.maxHeight);
+    }
+
+    let x = west ? r.startPosX + r.startWidth - width : r.startPosX;
+    let y = north ? r.startPosY + r.startHeight - height : r.startPosY;
+
+    // Never resize past the node extent
+    const extent = this.hook.config.nodeExtent;
+    if (extent) {
+      const [[minX, minY], [maxX, maxY]] = extent;
+      if (x < minX) {
+        width -= minX - x;
+        x = minX;
+      }
+      if (y < minY) {
+        height -= minY - y;
+        y = minY;
+      }
+      if (x + width > maxX) width = maxX - x;
+      if (y + height > maxY) height = maxY - y;
+    }
+
+    return { width, height, x, y };
+  }
+
+  endResize() {
+    const r = this.resizingNode;
+    if (!r) return false;
+
+    r.element.dataset.resizing = 'false';
+    const dims = this.clientDimensions.get(r.nodeId);
+
+    if (r.started && dims) {
+      this.pushResize(dims.width, dims.height, dims.x, dims.y, false);
+
+      // Update the measured nodes cache so ResizeObserver doesn't
+      // send stale dimensions that would overwrite the resize
+      this.hook._measuredNodes?.set(r.nodeId, { w: Math.round(dims.width), h: Math.round(dims.height) });
+
+      // Keep clientDimensions until the server re-renders (see onUpdated)
+      this._pendingClear = true;
+    } else {
+      this.clientDimensions.clear();
+    }
+
     this.resizingNode = null;
-    // Keep clientDimensions until the next server re-render (updated callback)
-    // so the explicit CSS dimensions survive DOM patches
-    this._pendingClear = true;
     this.affectedEdges = [];
+    return r.started;
+  }
+
+  /**
+   * Abort the resize and restore the start dimensions.
+   */
+  abortResize() {
+    const r = this.resizingNode;
+    if (!r) return;
+
+    r.element.dataset.resizing = 'false';
+    r.element.style.width = r.started ? `${r.startWidth}px` : r.element.style.width;
+    r.element.style.height = r.started ? `${r.startHeight}px` : r.element.style.height;
+    r.element.style.left = `${r.startPosX}px`;
+    r.element.style.top = `${r.startPosY}px`;
+
+    if (r.started) {
+      const start = { width: r.startWidth, height: r.startHeight, x: r.startPosX, y: r.startPosY };
+      this.hook.edges.update(this.affectedEdges, new Map([[r.nodeId, start]]));
+      this.pushResize(r.startWidth, r.startHeight, r.startPosX, r.startPosY, false);
+    }
+
+    this.clientDimensions.clear();
+    this.resizingNode = null;
+    this.affectedEdges = [];
+  }
+
+  pushResize(width, height, x, y, resizing) {
+    this.hook.pushNodeChange([{
+      type: 'resize',
+      id: this.resizingNode.nodeId,
+      width,
+      height,
+      position: { x, y },
+      resizing,
+    }]);
   }
 
   /**
@@ -146,23 +215,21 @@ export class NodeResizeManager {
    * rendered the new width/height in the node style.
    */
   onUpdated() {
-    if (this._pendingClear) {
-      // Defer clear to AFTER measureNodes() which runs in a rAF from updated().
-      // Double-rAF ensures this runs in the next frame, after measureNodes.
+    if (!this._pendingClear) return;
+    // Defer the clear to after measureNodes(), which runs in a rAF from updated()
+    requestAnimationFrame(() => {
       requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
-          this._pendingClear = false;
-          this.clientDimensions.clear();
-        });
+        this._pendingClear = false;
+        this.clientDimensions.clear();
       });
-    }
+    });
   }
 
   reapplyDimensions() {
     if (this.clientDimensions.size === 0) return;
 
     this.clientDimensions.forEach(({ width, height, x, y }, nodeId) => {
-      const el = this.hook.nodeLayer.querySelector(`[data-node-id="${nodeId}"]`);
+      const el = this.hook.nodeEl(nodeId);
       if (el) {
         el.style.width = `${width}px`;
         el.style.height = `${height}px`;
@@ -171,89 +238,9 @@ export class NodeResizeManager {
       }
     });
 
-    this.updateEdgePaths();
-  }
-
-  cacheAffectedEdges() {
-    this.affectedEdges = [];
-    if (!this.resizingNode) return;
-
-    const nodeId = this.resizingNode.nodeId;
-    const edgeGroups = this.hook.edgeLayer.querySelectorAll('g[data-edge-id]');
-
-    edgeGroups.forEach(g => {
-      const sourceId = g.dataset.source;
-      const targetId = g.dataset.target;
-      if (!sourceId || !targetId) return;
-      if (sourceId !== nodeId && targetId !== nodeId) return;
-
-      const sourceHandlePos = this.hook.nodeDrag.getHandlePosition(sourceId, g.dataset.sourceHandle, 'source');
-      const targetHandlePos = this.hook.nodeDrag.getHandlePosition(targetId, g.dataset.targetHandle, 'target');
-
-      const paths = g.querySelectorAll('path');
-
-      this.affectedEdges.push({
-        g,
-        paths,
-        sourceNodeId: sourceId,
-        targetNodeId: targetId,
-        sourceHandlePos,
-        targetHandlePos,
-        labelWrapper: g.querySelector('.lf-edge-label-wrapper'),
-        insertWrapper: g.querySelector('.lf-edge-insert-wrapper'),
-      });
-    });
-  }
-
-  getHandleCoords(nodeId, handlePosition) {
-    const nodeEl = this.hook.nodeLayer.querySelector(`[data-node-id="${nodeId}"]`);
-    if (!nodeEl) return null;
-
-    const dims = this.clientDimensions.get(nodeId);
-    const x = dims ? dims.x : (parseFloat(nodeEl.style.left) || 0);
-    const y = dims ? dims.y : (parseFloat(nodeEl.style.top) || 0);
-    const w = dims ? dims.width : (nodeEl.offsetWidth || 100);
-    const h = dims ? dims.height : (nodeEl.offsetHeight || 40);
-
-    switch (handlePosition) {
-      case 'top':    return { x: x + w / 2, y: y };
-      case 'bottom': return { x: x + w / 2, y: y + h };
-      case 'left':   return { x: x, y: y + h / 2 };
-      case 'right':  return { x: x + w, y: y + h / 2 };
-      default:       return { x: x + w, y: y + h / 2 };
-    }
-  }
-
-  updateEdgePaths() {
-    for (const edge of this.affectedEdges) {
-      // Use our getHandleCoords for the resizing node, nodeDrag's for others
-      const sourceCoords = this.clientDimensions.has(edge.sourceNodeId)
-        ? this.getHandleCoords(edge.sourceNodeId, edge.sourceHandlePos)
-        : this.hook.nodeDrag.getHandleCoords(edge.sourceNodeId, edge.sourceHandlePos);
-      const targetCoords = this.clientDimensions.has(edge.targetNodeId)
-        ? this.getHandleCoords(edge.targetNodeId, edge.targetHandlePos)
-        : this.hook.nodeDrag.getHandleCoords(edge.targetNodeId, edge.targetHandlePos);
-
-      if (!sourceCoords || !targetCoords) continue;
-
-      const pathD = calculateBezierPath(
-        sourceCoords.x, sourceCoords.y, edge.sourceHandlePos,
-        targetCoords.x, targetCoords.y, edge.targetHandlePos
-      );
-
-      edge.paths.forEach(p => { p.setAttribute('d', pathD); });
-
-      const midX = (sourceCoords.x + targetCoords.x) / 2;
-      const midY = (sourceCoords.y + targetCoords.y) / 2;
-
-      if (edge.labelWrapper) {
-        edge.labelWrapper.setAttribute('x', midX - 50);
-        edge.labelWrapper.setAttribute('y', midY - 10);
-      }
-      if (edge.insertWrapper) {
-        edge.insertWrapper.setAttribute('x', midX - 12);
-        edge.insertWrapper.setAttribute('y', midY - 12);
-      }
+    this.hook.edges.updateForNodes(new Set(this.clientDimensions.keys()), this.clientDimensions);
+    if (this.resizingNode) {
+      this.affectedEdges = this.hook.edges.collect(new Set([this.resizingNode.nodeId]));
     }
   }
 

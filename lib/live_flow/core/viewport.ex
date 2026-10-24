@@ -165,10 +165,36 @@ defmodule LiveFlow.Viewport do
       iex> vp = LiveFlow.Viewport.new(x: 100, y: 50, zoom: 2.0)
       iex> LiveFlow.Viewport.screen_to_flow(vp, 200, 150)
       {50.0, 50.0}
+
+  Pass `snap_to_grid: true` (and optionally `snap_grid: {x, y}`, default
+  `{15, 15}`) to snap the result, e.g. when dropping a node:
+
+      iex> vp = LiveFlow.Viewport.new(x: 0, y: 0, zoom: 1.0)
+      iex> LiveFlow.Viewport.screen_to_flow(vp, 22, 38, snap_to_grid: true)
+      {15.0, 45.0}
   """
-  @spec screen_to_flow(t(), number(), number()) :: {float(), float()}
-  def screen_to_flow(%__MODULE__{x: vx, y: vy, zoom: z}, screen_x, screen_y) do
-    {(screen_x - vx) / z, (screen_y - vy) / z}
+  @spec screen_to_flow(t(), number(), number(), keyword()) :: {float(), float()}
+  def screen_to_flow(%__MODULE__{x: vx, y: vy, zoom: z}, screen_x, screen_y, opts \\ []) do
+    point = {(screen_x - vx) / z, (screen_y - vy) / z}
+
+    if Keyword.get(opts, :snap_to_grid, false) do
+      snap(point, Keyword.get(opts, :snap_grid, {15, 15}))
+    else
+      point
+    end
+  end
+
+  @doc """
+  Snaps a point to a grid.
+
+  ## Examples
+
+      iex> LiveFlow.Viewport.snap({22.0, 38.0}, {15, 15})
+      {15.0, 45.0}
+  """
+  @spec snap({number(), number()}, {number(), number()}) :: {float(), float()}
+  def snap({x, y}, {grid_x, grid_y}) do
+    {Float.round(x / grid_x) * grid_x * 1.0, Float.round(y / grid_y) * grid_y * 1.0}
   end
 
   @doc """

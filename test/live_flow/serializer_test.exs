@@ -11,7 +11,6 @@ defmodule LiveFlow.SerializerTest do
     Edge.new(id, source, target, opts)
   end
 
-
   defp build_flow do
     h1 = Handle.new(:source, :bottom, id: "out")
     h2 = Handle.new(:target, :top, id: "in")
@@ -113,10 +112,11 @@ defmodule LiveFlow.SerializerTest do
     end
 
     test "serializes markers" do
-      edge = make_edge("e1", "a", "b",
-        marker_start: %{type: :arrow_closed, color: "red"},
-        marker_end: %{type: :arrow}
-      )
+      edge =
+        make_edge("e1", "a", "b",
+          marker_start: %{type: :arrow_closed, color: "red"},
+          marker_end: %{type: :arrow}
+        )
 
       flow = State.new(edges: [edge])
       exported = Serializer.export(flow)
@@ -209,10 +209,11 @@ defmodule LiveFlow.SerializerTest do
     end
 
     test "restores markers" do
-      edge = make_edge("e1", "a", "b",
-        marker_start: %{type: :arrow_closed},
-        marker_end: %{type: :arrow}
-      )
+      edge =
+        make_edge("e1", "a", "b",
+          marker_start: %{type: :arrow_closed},
+          marker_end: %{type: :arrow}
+        )
 
       flow = State.new(nodes: [make_node("a"), make_node("b")], edges: [edge])
       exported = Serializer.export(flow)

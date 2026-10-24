@@ -1,136 +1,491 @@
 /**
  * LiveFlow Export Utilities
  *
- * Exports the flow diagram as SVG or PNG by capturing the rendered DOM.
+ * Exports the flow diagram as SVG or PNG from the rendered DOM.
+ *
+ * Nodes and edge labels are cloned with their *computed* styles inlined
+ * (only the properties that differ from the browser defaults), so the export
+ * is self-contained: Tailwind classes, theme variables, icons (CSS masks)
+ * and markers render exactly as on screen, without depending on the page
+ * stylesheets. The PNG is a rasterization of that same SVG.
+ *
+ * Editor chrome (delete buttons, resizers, edge toolbars, reconnect handles)
+ * is left out. Add `data-lf-export-ignore` to any element to exclude it.
  */
 
+const SVG_NS = 'http://www.w3.org/2000/svg';
+const XHTML_NS = 'http://www.w3.org/1999/xhtml';
+
+const EXCLUDE = [
+  '.lf-node-delete-btn',
+  '.lf-node-resizer-container',
+  '.lf-edge-interaction',
+  '.lf-edge-delete-wrapper',
+  '.lf-edge-insert-wrapper',
+  '.lf-edge-toolbar-wrapper',
+  '.lf-edge-reconnect-handle',
+  '[data-lf-export-ignore]',
+].join(', ');
+
+// Properties that don't affect the picture
+const SKIP_PROPERTY = /^(animation|transition|cursor|pointer-events|user-select|-webkit-user-select|will-change|caret-color|touch-action|outline|scrollbar-|text-size-adjust|-webkit-locale|-webkit-tap-highlight-color|color-scheme|text-emphasis-color)|-rule-color$/;
+// Logical properties duplicate the physical ones (border-block-start = border-top)
+const LOGICAL_PROPERTY = /-(block|inline)(-|$)/;
+// SVG elements only need paint and text properties; geometry lives in attributes
+const SVG_PROPERTY = /^(fill|stroke|opacity|display|visibility|overflow|color$|font|text-anchor|dominant-baseline|letter-spacing|marker|paint-order|shape-rendering|mix-blend-mode|filter|clip-path|mask|transform|vector-effect)/;
+
+// Room around nodes so handles and shadows aren't clipped
+const NODE_OVERFLOW = 12;
+
 /**
- * Collects all relevant CSS rules for LiveFlow elements.
+ * Inlines computed styles, diffing against the browser defaults of each
+ * element type (read from a blank sandbox iframe).
  */
-function collectStyles() {
-  const rules = [];
-  for (const sheet of document.styleSheets) {
-    try {
-      for (const rule of sheet.cssRules || []) {
-        const text = rule.cssText || '';
-        if (text.includes('lf-') || text.includes('--lf-')) {
-          rules.push(text);
-        }
+class StyleInliner {
+  constructor() {
+    this.defaults = new Map();
+    this.pseudoRules = [];
+    this.pseudoCount = 0;
+    this.iframe = null;
+  }
+
+  sandbox() {
+    if (!this.iframe) {
+      this.iframe = document.createElement('iframe');
+      this.iframe.setAttribute('aria-hidden', 'true');
+      this.iframe.style.cssText = 'position:fixed;left:-10000px;top:0;width:100px;height:100px;visibility:hidden;border:0;';
+      document.body.appendChild(this.iframe);
+      const doc = this.iframe.contentDocument;
+      doc.open();
+      doc.write(`<!DOCTYPE html><html><head></head><body><svg xmlns="${SVG_NS}"></svg></body></html>`);
+      doc.close();
+    }
+    return this.iframe;
+  }
+
+  defaultsFor(el, pseudo = null) {
+    const key = `${el.namespaceURI}|${el.localName}|${pseudo || ''}`;
+    if (this.defaults.has(key)) return this.defaults.get(key);
+
+    const iframe = this.sandbox();
+    const doc = iframe.contentDocument;
+    const parent = el.namespaceURI === SVG_NS ? doc.querySelector('svg') : doc.body;
+    const sandboxEl = doc.createElementNS(el.namespaceURI, el.localName);
+    parent.appendChild(sandboxEl);
+
+    const style = iframe.contentWindow.getComputedStyle(sandboxEl, pseudo);
+    const values = new Map();
+    for (let i = 0; i < style.length; i++) {
+      values.set(style[i], style.getPropertyValue(style[i]));
+    }
+
+    sandboxEl.remove();
+    this.defaults.set(key, values);
+    return values;
+  }
+
+  declarations(source, pseudo = null) {
+    const computed = getComputedStyle(source, pseudo);
+    const defaults = this.defaultsFor(source, pseudo);
+    const isSvg = source.namespaceURI === SVG_NS;
+    const declarations = [];
+
+    for (let i = 0; i < computed.length; i++) {
+      const name = computed[i];
+      if (name.startsWith('--') || SKIP_PROPERTY.test(name) || LOGICAL_PROPERTY.test(name)) continue;
+      if (isSvg && !SVG_PROPERTY.test(name)) continue;
+
+      const value = computed.getPropertyValue(name);
+      if (value !== defaults.get(name)) {
+        declarations.push(`${name}:${value}`);
       }
-    } catch (e) {
-      // Cross-origin stylesheet, skip
+    }
+
+    return declarations;
+  }
+
+  inline(source, target) {
+    target.setAttribute('style', this.declarations(source).join(';'));
+
+    // ::before / ::after can't be inlined: emit a scoped rule instead
+    for (const pseudo of ['::before', '::after']) {
+      const content = getComputedStyle(source, pseudo).getPropertyValue('content');
+      if (!content || content === 'none' || content === 'normal') continue;
+
+      const className = `lf-export-p${this.pseudoCount++}`;
+      target.setAttribute('class', `${target.getAttribute('class') || ''} ${className}`.trim());
+      this.pseudoRules.push(`.${className}${pseudo}{${this.declarations(source, pseudo).join(';')}}`);
     }
   }
-  return rules.join('\n');
+
+  destroy() {
+    this.iframe?.remove();
+    this.iframe = null;
+  }
 }
 
 /**
- * Reads node position and size data from the DOM.
- * Captures only .lf-node-content innerHTML (excludes handles & delete button).
+ * Deep-clones `source`, inlining computed styles and dropping comments,
+ * editor chrome and framework attributes.
  */
-function getNodeData(container) {
-  const viewport = container.querySelector('.lf-viewport');
-  if (!viewport) return [];
+function cloneWithStyles(source, inliner) {
+  if (source.nodeType === Node.TEXT_NODE) return source.cloneNode(false);
+  if (source.nodeType !== Node.ELEMENT_NODE) return null;
+  if (source.matches(EXCLUDE)) return null;
 
-  const nodeLayer = viewport.querySelector('[data-node-layer]');
-  if (!nodeLayer) return [];
+  const clone = source.cloneNode(false);
+  const isSvg = source.namespaceURI === SVG_NS;
 
-  const nodes = nodeLayer.querySelectorAll('.lf-node');
-  const result = [];
+  for (const { name } of Array.from(clone.attributes)) {
+    // SVG ids are referenced by markers (marker-end="url(#...)")
+    const keepId = name === 'id' && isSvg;
+    if (!keepId && (name === 'id' || name === 'class' || name === 'style' ||
+        name.startsWith('phx-') || name.startsWith('data-'))) {
+      clone.removeAttribute(name);
+    }
+  }
 
-  nodes.forEach(node => {
-    const x = parseFloat(node.style.left) || 0;
-    const y = parseFloat(node.style.top) || 0;
-    const w = node.offsetWidth;
-    const h = node.offsetHeight;
-    const nodeStyle = getComputedStyle(node);
+  // Form fields keep their current value
+  if (source instanceof HTMLInputElement) {
+    if (source.type === 'checkbox' || source.type === 'radio') {
+      if (source.checked) clone.setAttribute('checked', '');
+    } else {
+      clone.setAttribute('value', source.value);
+    }
+  }
 
-    const contentEl = node.querySelector('.lf-node-content');
-    const labelEl = node.querySelector('.lf-default-node-label') || contentEl;
-    const label = labelEl ? labelEl.textContent.trim() : '';
+  inliner.inline(source, clone);
 
-    const contentHTML = contentEl ? cleanHTML(contentEl.innerHTML) : '';
-    const contentStyle = contentEl ? getComputedStyle(contentEl) : {};
+  if (source instanceof HTMLTextAreaElement) {
+    clone.textContent = source.value;
+    return clone;
+  }
 
-    result.push({
-      x, y, w, h, label,
-      innerHTML: contentHTML,
-      bg: nodeStyle.backgroundColor,
-      border: nodeStyle.border,
-      borderRadius: nodeStyle.borderRadius,
-      boxShadow: nodeStyle.boxShadow,
-      contentPadding: contentStyle.padding || '0px',
-      color: nodeStyle.color,
-      fontFamily: nodeStyle.fontFamily,
-      fontSize: nodeStyle.fontSize,
+  for (const child of source.childNodes) {
+    const childClone = cloneWithStyles(child, inliner);
+    if (childClone) clone.appendChild(childClone);
+  }
+
+  if (source instanceof HTMLSelectElement) {
+    clone.querySelectorAll('option').forEach(option => {
+      if (option.getAttribute('value') === source.value) option.setAttribute('selected', '');
     });
-  });
+  }
 
-  return result;
+  return clone;
 }
 
-/**
- * Strips Phoenix debug comments and data-phx attributes from HTML.
- */
-function cleanHTML(html) {
-  return html
-    .replace(/<!--.*?-->/g, '')
-    .replace(/\s*data-phx-[a-z-]+="[^"]*"/g, '');
+// ===== Bounds =====
+
+function renderedNodes(container) {
+  return Array.from(container.querySelectorAll('[data-node-layer] .lf-node[data-node-id]'))
+    .filter(el => el.offsetWidth > 0 || el.offsetHeight > 0);
 }
 
-/**
- * Calculates the bounding box of all flow content (nodes + edges).
- */
-function calculateBounds(container) {
-  const nodes = getNodeData(container);
-  if (nodes.length === 0) return { x: 0, y: 0, width: 800, height: 600 };
-
-  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-
-  nodes.forEach(({ x, y, w, h }) => {
-    minX = Math.min(minX, x);
-    minY = Math.min(minY, y);
-    maxX = Math.max(maxX, x + w);
-    maxY = Math.max(maxY, y + h);
-  });
-
-  if (!isFinite(minX)) return { x: 0, y: 0, width: 800, height: 600 };
-
-  const padding = 40;
+function nodeRect(el) {
   return {
-    x: minX - padding,
-    y: minY - padding,
-    width: (maxX - minX) + padding * 2,
-    height: (maxY - minY) + padding * 2
+    x: parseFloat(el.style.left) || 0,
+    y: parseFloat(el.style.top) || 0,
+    width: el.offsetWidth,
+    height: el.offsetHeight,
   };
 }
 
 /**
- * Collects edge label data from foreignObject elements before stripping them.
- * Captures full styling for native SVG rendering (background, border, font).
+ * Bounds of everything drawn (nodes, edge paths, edge labels) in flow coordinates.
  */
+function calculateBounds(container, padding) {
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  const include = (x, y, width, height) => {
+    minX = Math.min(minX, x);
+    minY = Math.min(minY, y);
+    maxX = Math.max(maxX, x + width);
+    maxY = Math.max(maxY, y + height);
+  };
+
+  renderedNodes(container).forEach(el => {
+    const r = nodeRect(el);
+    include(r.x, r.y, r.width, r.height);
+  });
+
+  container.querySelectorAll('[data-edge-layer] path.lf-edge').forEach(path => {
+    try {
+      const box = path.getBBox();
+      if (box.width || box.height) include(box.x, box.y, box.width, box.height);
+    } catch (_e) {
+      // Not rendered
+    }
+  });
+
+  container.querySelectorAll('[data-edge-layer] foreignObject.lf-edge-label-wrapper').forEach(fo => {
+    include(
+      parseFloat(fo.getAttribute('x')) || 0,
+      parseFloat(fo.getAttribute('y')) || 0,
+      parseFloat(fo.getAttribute('width')) || 0,
+      parseFloat(fo.getAttribute('height')) || 0
+    );
+  });
+
+  if (!isFinite(minX)) return { x: 0, y: 0, width: 800, height: 600 };
+
+  return {
+    x: minX - padding,
+    y: minY - padding,
+    width: maxX - minX + padding * 2,
+    height: maxY - minY + padding * 2,
+  };
+}
+
+// ===== SVG building =====
+
+function readConfig(container) {
+  try {
+    return JSON.parse(container.dataset.config || '{}');
+  } catch (_e) {
+    return {};
+  }
+}
+
+function createRoot(bounds, scale) {
+  const svg = document.createElementNS(SVG_NS, 'svg');
+  svg.setAttribute('xmlns', SVG_NS);
+  svg.setAttribute('width', bounds.width * scale);
+  svg.setAttribute('height', bounds.height * scale);
+  svg.setAttribute('viewBox', `${bounds.x} ${bounds.y} ${bounds.width} ${bounds.height}`);
+  return svg;
+}
+
+/**
+ * Canvas color plus the background pattern, in flow coordinates (zoom 1).
+ */
+function appendBackground(svg, container, bounds) {
+  const computed = getComputedStyle(container);
+  const rect = document.createElementNS(SVG_NS, 'rect');
+  rect.setAttribute('x', bounds.x);
+  rect.setAttribute('y', bounds.y);
+  rect.setAttribute('width', bounds.width);
+  rect.setAttribute('height', bounds.height);
+  rect.setAttribute('fill', computed.backgroundColor || '#f8f8f8');
+  svg.appendChild(rect);
+
+  const bg = readConfig(container).background;
+  const source = container.querySelector('[data-background] .lf-background-pattern');
+  if (!bg || !source) return;
+
+  const [gapX, gapY] = bg.gap;
+  const isDots = bg.variant === 'dots';
+  const dims = bg.variant === 'cross' ? [bg.size, bg.size] : [gapX, gapY];
+  const sourceStyle = getComputedStyle(source);
+
+  const pattern = document.createElementNS(SVG_NS, 'pattern');
+  pattern.setAttribute('id', 'lf-export-background');
+  pattern.setAttribute('patternUnits', 'userSpaceOnUse');
+  pattern.setAttribute('x', 0);
+  pattern.setAttribute('y', 0);
+  pattern.setAttribute('width', gapX);
+  pattern.setAttribute('height', gapY);
+  pattern.setAttribute('patternTransform', `translate(-${bg.offset[0] + dims[0] / 2},-${bg.offset[1] + dims[1] / 2})`);
+
+  let shape;
+  if (isDots) {
+    const r = bg.size / 2;
+    shape = document.createElementNS(SVG_NS, 'circle');
+    shape.setAttribute('cx', r);
+    shape.setAttribute('cy', r);
+    shape.setAttribute('r', r);
+    shape.setAttribute('fill', sourceStyle.fill);
+  } else {
+    shape = document.createElementNS(SVG_NS, 'path');
+    shape.setAttribute('d', `M${dims[0] / 2} 0 V${dims[1]} M0 ${dims[1] / 2} H${dims[0]}`);
+    shape.setAttribute('stroke', sourceStyle.stroke);
+    shape.setAttribute('stroke-width', bg.lineWidth || 1);
+    shape.setAttribute('fill', 'none');
+  }
+
+  const defs = document.createElementNS(SVG_NS, 'defs');
+  pattern.appendChild(shape);
+  defs.appendChild(pattern);
+  svg.appendChild(defs);
+
+  const fill = document.createElementNS(SVG_NS, 'rect');
+  fill.setAttribute('x', bounds.x);
+  fill.setAttribute('y', bounds.y);
+  fill.setAttribute('width', bounds.width);
+  fill.setAttribute('height', bounds.height);
+  fill.setAttribute('fill', 'url(#lf-export-background)');
+  svg.appendChild(fill);
+}
+
+/**
+ * Edges (markers, paths and labels) with inlined styles.
+ * In native mode foreignObject labels are replaced with SVG text.
+ */
+function appendEdges(svg, container, inliner, native) {
+  const edgeSvg = container.querySelector('[data-edge-layer]');
+  if (!edgeSvg) return;
+
+  for (const child of edgeSvg.children) {
+    const clone = cloneWithStyles(child, inliner);
+    if (!clone) continue;
+
+    if (native) {
+      clone.querySelectorAll('foreignObject').forEach(fo => fo.remove());
+    }
+    svg.appendChild(clone);
+  }
+
+  if (native) {
+    getEdgeLabelData(edgeSvg).forEach(label => svg.appendChild(nativeLabel(label)));
+  }
+}
+
+/**
+ * Nodes as foreignObjects containing a styled clone of the node element.
+ */
+function appendNodes(svg, container, inliner) {
+  renderedNodes(container).forEach(el => {
+    const r = nodeRect(el);
+    const clone = cloneWithStyles(el, inliner);
+    if (!clone) return;
+
+    // Lay the node out inside its foreignObject instead of the viewport
+    clone.style.position = 'relative';
+    clone.style.left = '0';
+    clone.style.top = '0';
+    clone.style.margin = '0';
+    clone.style.transform = 'none';
+
+    const wrapper = document.createElementNS(XHTML_NS, 'div');
+    wrapper.setAttribute('style', `padding:${NODE_OVERFLOW}px;width:${r.width}px;height:${r.height}px;box-sizing:content-box;`);
+    wrapper.appendChild(clone);
+
+    const fo = document.createElementNS(SVG_NS, 'foreignObject');
+    fo.setAttribute('x', r.x - NODE_OVERFLOW);
+    fo.setAttribute('y', r.y - NODE_OVERFLOW);
+    fo.setAttribute('width', r.width + NODE_OVERFLOW * 2);
+    fo.setAttribute('height', r.height + NODE_OVERFLOW * 2);
+    fo.appendChild(wrapper);
+    svg.appendChild(fo);
+  });
+}
+
+function appendPseudoRules(svg, inliner) {
+  if (inliner.pseudoRules.length === 0) return;
+  const style = document.createElementNS(SVG_NS, 'style');
+  style.textContent = inliner.pseudoRules.join('\n');
+  svg.insertBefore(style, svg.firstChild);
+}
+
+/**
+ * Builds the export SVG element.
+ *
+ * @param {HTMLElement} container - the .lf-container element
+ * @param {Object} [options]
+ * @param {number} [options.scale=1] - output size multiplier
+ * @param {number} [options.padding=40] - space around the content, in flow units
+ * @param {boolean} [options.background=true] - include the canvas background
+ * @param {boolean} [options.native=false] - pure SVG (no foreignObject)
+ */
+export function buildExportSvg(container, options = {}) {
+  const { scale = 1, padding = 40, background = true, native = false } = options;
+  const bounds = calculateBounds(container, padding);
+  const svg = createRoot(bounds, scale);
+  const inliner = new StyleInliner();
+
+  try {
+    if (background) appendBackground(svg, container, bounds);
+    appendEdges(svg, container, inliner, native);
+
+    if (native) {
+      buildNativeSvgNodes(svg, container);
+    } else {
+      appendNodes(svg, container, inliner);
+    }
+
+    appendPseudoRules(svg, inliner);
+  } finally {
+    inliner.destroy();
+  }
+
+  return { svg, bounds };
+}
+
+/**
+ * Exports the flow as an SVG string.
+ */
+export function exportSVG(container, options = {}) {
+  if (!container.querySelector('.lf-viewport')) return null;
+  const { svg } = buildExportSvg(container, withoutUndefined(options));
+  return new XMLSerializer().serializeToString(svg);
+}
+
+/**
+ * Exports the flow as a PNG blob, rasterizing the same SVG as exportSVG.
+ * Falls back to a pure-SVG rendering if the browser taints the canvas.
+ */
+export async function exportPNG(container, scale = 2, options = {}) {
+  if (!container.querySelector('.lf-viewport')) throw new Error('Could not generate SVG');
+  options = withoutUndefined(options);
+
+  try {
+    return await rasterize(buildExportSvg(container, { ...options, scale }), scale);
+  } catch (error) {
+    if (error?.name !== 'SecurityError') throw error;
+    return rasterize(buildExportSvg(container, { ...options, scale, native: true }), scale);
+  }
+}
+
+function withoutUndefined(options) {
+  return Object.fromEntries(Object.entries(options || {}).filter(([, v]) => v !== undefined && v !== null));
+}
+
+async function rasterize({ svg, bounds }, scale) {
+  const svgString = new XMLSerializer().serializeToString(svg);
+  const img = new Image();
+  img.decoding = 'sync';
+  img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgString);
+
+  try {
+    await img.decode();
+  } catch (_e) {
+    throw new Error('Failed to render SVG to canvas');
+  }
+
+  const canvas = document.createElement('canvas');
+  canvas.width = Math.ceil(bounds.width * scale);
+  canvas.height = Math.ceil(bounds.height * scale);
+  const ctx = canvas.getContext('2d');
+
+  // WebKit may paint foreignObject content a tick late. Not requestAnimationFrame:
+  // it never fires in background tabs and the export would hang.
+  await new Promise(resolve => setTimeout(resolve, 0));
+  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+  return new Promise((resolve, reject) => {
+    // toBlob throws a SecurityError on a tainted canvas
+    canvas.toBlob(blob => {
+      if (blob) resolve(blob);
+      else reject(new Error('Canvas toBlob returned null'));
+    }, 'image/png');
+  });
+}
+
+// ===== Native fallback (no foreignObject) =====
+
 function getEdgeLabelData(edgeSvg) {
   const labels = [];
-  if (!edgeSvg) return labels;
-
-  const foreignObjects = edgeSvg.querySelectorAll('foreignObject.lf-edge-label-wrapper');
-  foreignObjects.forEach(fo => {
+  edgeSvg.querySelectorAll('foreignObject.lf-edge-label-wrapper').forEach(fo => {
     const labelEl = fo.querySelector('.lf-edge-label');
     if (!labelEl) return;
 
-    const x = parseFloat(fo.getAttribute('x')) || 0;
-    const y = parseFloat(fo.getAttribute('y')) || 0;
     const w = parseFloat(fo.getAttribute('width')) || 100;
     const h = parseFloat(fo.getAttribute('height')) || 20;
-    const text = labelEl.textContent.trim();
     const ls = getComputedStyle(labelEl);
 
     labels.push({
-      x: x + w / 2,
-      y: y + h / 2,
-      foW: w,
-      foH: h,
-      text,
+      x: (parseFloat(fo.getAttribute('x')) || 0) + w / 2,
+      y: (parseFloat(fo.getAttribute('y')) || 0) + h / 2,
+      text: labelEl.textContent.trim(),
       color: ls.color || '#666666',
       fontSize: ls.fontSize || '12px',
       fontFamily: ls.fontFamily || 'sans-serif',
@@ -138,319 +493,72 @@ function getEdgeLabelData(edgeSvg) {
       bg: ls.backgroundColor,
       border: ls.border,
       borderRadius: parseFloat(ls.borderRadius) || 4,
-      padding: ls.padding,
     });
   });
-
   return labels;
 }
 
-/**
- * Creates common SVG setup: root element, styles, background, edges.
- * When nativeModeForPng is true, foreignObject elements are stripped from edges
- * and replaced with native SVG text to avoid canvas taint.
- */
-function createBaseSvg(container, bounds, { nativeModeForPng = false } = {}) {
-  const viewport = container.querySelector('.lf-viewport');
-  if (!viewport) return null;
+function nativeLabel(label) {
+  const g = document.createElementNS(SVG_NS, 'g');
+  const textW = label.text.length * parseFloat(label.fontSize) * 0.6;
+  const rectW = textW + 16;
+  const rectH = parseFloat(label.fontSize) + 8;
 
-  const edgeSvg = viewport.querySelector('.lf-edges');
-  const computed = getComputedStyle(container);
-
-  const svgNs = 'http://www.w3.org/2000/svg';
-  const svg = document.createElementNS(svgNs, 'svg');
-  svg.setAttribute('xmlns', svgNs);
-  svg.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink');
-  svg.setAttribute('width', bounds.width);
-  svg.setAttribute('height', bounds.height);
-  svg.setAttribute('viewBox', `${bounds.x} ${bounds.y} ${bounds.width} ${bounds.height}`);
-
-  // Embed styles
-  const styleEl = document.createElementNS(svgNs, 'style');
-  const cssText = collectStyles();
-  const themeVars = [
-    '--lf-background', '--lf-node-bg', '--lf-node-border', '--lf-node-border-radius',
-    '--lf-node-shadow', '--lf-node-selected-border', '--lf-edge-stroke',
-    '--lf-edge-stroke-width', '--lf-text-primary', '--lf-text-muted'
-  ].map(v => `${v}: ${computed.getPropertyValue(v)}`).filter(v => !v.endsWith(': ')).join('; ');
-
-  styleEl.textContent = `:root { ${themeVars} }\n${cssText}\n` +
-    `.lf-node { position: absolute; }\n` +
-    `.lf-edge-interaction { display: none; }\n` +
-    `.lf-edge-delete-wrapper { display: none; }`;
-  svg.appendChild(styleEl);
-
-  // Background
-  const bgRect = document.createElementNS(svgNs, 'rect');
-  bgRect.setAttribute('x', bounds.x);
-  bgRect.setAttribute('y', bounds.y);
-  bgRect.setAttribute('width', bounds.width);
-  bgRect.setAttribute('height', bounds.height);
-  bgRect.setAttribute('fill', computed.getPropertyValue('--lf-background') || '#f8f8f8');
-  svg.appendChild(bgRect);
-
-  // Collect edge label data before cloning (for native mode replacement)
-  const edgeLabels = nativeModeForPng ? getEdgeLabelData(edgeSvg) : [];
-
-  // Clone and add edge SVG content
-  if (edgeSvg) {
-    const edgeClone = edgeSvg.cloneNode(true);
-
-    // Strip foreignObject elements for PNG (they taint the canvas)
-    if (nativeModeForPng) {
-      const fos = edgeClone.querySelectorAll('foreignObject');
-      fos.forEach(fo => fo.remove());
-    } else {
-      // For SVG export: ensure foreignObject HTML content has XHTML namespace
-      // (required for standalone SVG files to render HTML correctly)
-      const fos = edgeClone.querySelectorAll('foreignObject');
-      fos.forEach(fo => {
-        const firstChild = fo.firstElementChild;
-        if (firstChild && !firstChild.getAttribute('xmlns')) {
-          firstChild.setAttribute('xmlns', 'http://www.w3.org/1999/xhtml');
-        }
-        // Inline computed styles so labels render correctly standalone
-        const origFo = edgeSvg.querySelector(`foreignObject[x="${fo.getAttribute('x')}"][y="${fo.getAttribute('y')}"]`);
-        if (origFo) {
-          const origLabel = origFo.querySelector('.lf-edge-label');
-          const clonedLabel = fo.querySelector('.lf-edge-label');
-          if (origLabel && clonedLabel) {
-            const ls = getComputedStyle(origLabel);
-            clonedLabel.style.cssText = `
-              display: flex; justify-content: center; align-items: center;
-              font-family: ${ls.fontFamily}; font-size: ${ls.fontSize}; font-weight: ${ls.fontWeight};
-              color: ${ls.color}; background: ${ls.backgroundColor};
-              padding: ${ls.padding}; border-radius: ${ls.borderRadius};
-              border: ${ls.border}; box-shadow: ${ls.boxShadow};
-            `;
-          }
-        }
-      });
-    }
-
-    for (const child of Array.from(edgeClone.children)) {
-      svg.appendChild(child.cloneNode(true));
-    }
+  const rect = document.createElementNS(SVG_NS, 'rect');
+  rect.setAttribute('x', label.x - rectW / 2);
+  rect.setAttribute('y', label.y - rectH / 2);
+  rect.setAttribute('width', rectW);
+  rect.setAttribute('height', rectH);
+  rect.setAttribute('fill', label.bg && label.bg !== 'rgba(0, 0, 0, 0)' ? label.bg : '#ffffff');
+  rect.setAttribute('rx', label.borderRadius);
+  const borderColor = parseBorderColor(label.border);
+  if (borderColor) {
+    rect.setAttribute('stroke', borderColor);
+    rect.setAttribute('stroke-width', parseBorderWidth(label.border) || '1');
   }
+  g.appendChild(rect);
 
-  // Add native SVG elements for edge labels in PNG mode (with background)
-  if (nativeModeForPng) {
-    edgeLabels.forEach(label => {
-      const g = document.createElementNS(svgNs, 'g');
+  const text = document.createElementNS(SVG_NS, 'text');
+  text.setAttribute('x', label.x);
+  text.setAttribute('y', label.y);
+  text.setAttribute('text-anchor', 'middle');
+  text.setAttribute('dominant-baseline', 'central');
+  text.setAttribute('fill', label.color);
+  text.setAttribute('font-size', label.fontSize);
+  text.setAttribute('font-family', label.fontFamily);
+  text.setAttribute('font-weight', label.fontWeight);
+  text.textContent = label.text;
+  g.appendChild(text);
 
-      // Estimate text width from character count and font size
-      const charWidth = parseFloat(label.fontSize) * 0.6;
-      const textW = label.text.length * charWidth;
-      const padH = 8, padV = 2;
-      const rectW = textW + padH * 2;
-      const rectH = parseFloat(label.fontSize) + padV * 2 + 4;
-
-      // Background rect
-      const bg = label.bg && label.bg !== 'rgba(0, 0, 0, 0)' ? label.bg : '#ffffff';
-      const rect = document.createElementNS(svgNs, 'rect');
-      rect.setAttribute('x', label.x - rectW / 2);
-      rect.setAttribute('y', label.y - rectH / 2);
-      rect.setAttribute('width', rectW);
-      rect.setAttribute('height', rectH);
-      rect.setAttribute('fill', bg);
-      rect.setAttribute('rx', label.borderRadius);
-      rect.setAttribute('ry', label.borderRadius);
-      const borderColor = parseBorderColor(label.border);
-      if (borderColor) {
-        rect.setAttribute('stroke', borderColor);
-        rect.setAttribute('stroke-width', parseBorderWidth(label.border) || '1');
-      }
-      g.appendChild(rect);
-
-      // Text
-      const text = document.createElementNS(svgNs, 'text');
-      text.setAttribute('x', label.x);
-      text.setAttribute('y', label.y);
-      text.setAttribute('text-anchor', 'middle');
-      text.setAttribute('dominant-baseline', 'central');
-      text.setAttribute('fill', label.color);
-      text.setAttribute('font-size', label.fontSize);
-      text.setAttribute('font-family', label.fontFamily);
-      text.setAttribute('font-weight', label.fontWeight);
-      text.textContent = label.text;
-      g.appendChild(text);
-
-      svg.appendChild(g);
-    });
-  }
-
-  return svg;
+  return g;
 }
 
 /**
- * Exports the flow as an SVG string (uses foreignObject for rich node rendering).
+ * Pure-SVG nodes: box, colored backgrounds and text runs at their rendered
+ * positions. Icons and other CSS-only visuals are lost.
  */
-export function exportSVG(container) {
-  const bounds = calculateBounds(container);
-  const svg = createBaseSvg(container, bounds);
-  if (!svg) return null;
-
-  const svgNs = 'http://www.w3.org/2000/svg';
-  const nodes = getNodeData(container);
-
-  // Add nodes as foreignObject (rich HTML rendering)
-  nodes.forEach(node => {
-    const fo = document.createElementNS(svgNs, 'foreignObject');
-    fo.setAttribute('x', node.x);
-    fo.setAttribute('y', node.y);
-    fo.setAttribute('width', node.w);
-    fo.setAttribute('height', node.h);
-
-    const div = document.createElement('div');
-    div.setAttribute('xmlns', 'http://www.w3.org/1999/xhtml');
-    div.innerHTML = node.innerHTML;
-    div.style.cssText = `
-      width: ${node.w}px;
-      height: ${node.h}px;
-      box-sizing: border-box;
-      font-family: ${node.fontFamily};
-      font-size: ${node.fontSize};
-      background: ${node.bg};
-      border: ${node.border};
-      border-radius: ${node.borderRadius};
-      box-shadow: ${node.boxShadow};
-      padding: ${node.contentPadding};
-      color: ${node.color};
-      overflow: hidden;
-    `;
-    fo.appendChild(div);
-    svg.appendChild(fo);
-  });
-
-  const serializer = new XMLSerializer();
-  return serializer.serializeToString(svg);
-}
-
-/**
- * Captures text blocks and background rects from a node's DOM for native SVG rendering.
- * All positions are in CSS-pixel space (unscaled), accounting for viewport zoom.
- */
-function getNodeVisualData(nodeEl) {
-  const content = nodeEl.querySelector('.lf-node-content');
-  if (!content) return { textBlocks: [], bgRects: [] };
-
-  const nodeRect = nodeEl.getBoundingClientRect();
-  const zoom = nodeRect.width / (nodeEl.offsetWidth || 1);
-  const textBlocks = [];
-  const bgRects = [];
-
-  // Capture colored background elements (headers, status dots, border-tops)
-  const allEls = content.querySelectorAll('*');
-  allEls.forEach(el => {
-    const style = getComputedStyle(el);
-    const bg = style.backgroundColor;
-    if (bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') {
-      const elRect = el.getBoundingClientRect();
-      if (elRect.width > 0 && elRect.height > 0) {
-        bgRects.push({
-          x: (elRect.left - nodeRect.left) / zoom,
-          y: (elRect.top - nodeRect.top) / zoom,
-          w: elRect.width / zoom,
-          h: elRect.height / zoom,
-          bg,
-          borderRadius: parseFloat(style.borderRadius) || 0,
-        });
-      }
-    }
-    // Capture visible border-top (like card node colored borders)
-    const btWidth = parseFloat(style.borderTopWidth);
-    if (btWidth >= 2 && style.borderTopColor && style.borderTopColor !== 'rgba(0, 0, 0, 0)') {
-      const elRect = el.getBoundingClientRect();
-      bgRects.push({
-        x: (elRect.left - nodeRect.left) / zoom,
-        y: (elRect.top - nodeRect.top) / zoom,
-        w: elRect.width / zoom,
-        h: btWidth,
-        bg: style.borderTopColor,
-        borderRadius: 0,
-      });
-    }
-  });
-
-  // Walk text nodes and capture their rendered positions + styles
-  const walker = document.createTreeWalker(content, NodeFilter.SHOW_TEXT, null);
-  let textNode;
-  while ((textNode = walker.nextNode())) {
-    const text = textNode.textContent.trim();
-    if (!text) continue;
-
-    const parent = textNode.parentElement;
-    if (!parent) continue;
-
-    const range = document.createRange();
-    range.selectNodeContents(textNode);
-    const clientRects = range.getClientRects();
-    if (clientRects.length === 0) continue;
-
-    const style = getComputedStyle(parent);
-    const isHidden = style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0';
-    if (isHidden) continue;
-
-    for (const cr of clientRects) {
-      if (cr.width === 0 || cr.height === 0) continue;
-      const lineText = text.length <= 60 ? text : text.substring(0, 57) + '...';
-      textBlocks.push({
-        text: lineText,
-        x: (cr.left - nodeRect.left) / zoom,
-        y: (cr.top - nodeRect.top) / zoom + cr.height / zoom * 0.75,
-        w: cr.width / zoom,
-        fontSize: style.fontSize,
-        fontWeight: style.fontWeight,
-        fontFamily: style.fontFamily,
-        color: style.color,
-        textAlign: style.textAlign,
-      });
-      break;
-    }
-  }
-
-  return { textBlocks, bgRects };
-}
-
-/**
- * Creates a pure-SVG representation of nodes (no foreignObject).
- * Walks the DOM to capture text positions, colors, and backgrounds.
- */
-function buildNativeSvgNodes(svg, nodes, container) {
-  const svgNs = 'http://www.w3.org/2000/svg';
-  const viewport = container.querySelector('.lf-viewport');
-  if (!viewport) return;
-  const nodeLayer = viewport.querySelector('[data-node-layer]');
-  if (!nodeLayer) return;
-
-  const nodeEls = nodeLayer.querySelectorAll('.lf-node');
-
-  nodeEls.forEach(nodeEl => {
-    const x = parseFloat(nodeEl.style.left) || 0;
-    const y = parseFloat(nodeEl.style.top) || 0;
-    const w = nodeEl.offsetWidth;
-    const h = nodeEl.offsetHeight;
+function buildNativeSvgNodes(svg, container) {
+  renderedNodes(container).forEach(nodeEl => {
+    const { x, y, width: w, height: h } = nodeRect(nodeEl);
     const nodeStyle = getComputedStyle(nodeEl);
+    const radius = parseFloat(nodeStyle.borderRadius) || 8;
+    const clipId = 'lf-clip-' + (nodeEl.dataset.nodeId || Math.random().toString(36).slice(2));
+    const g = document.createElementNS(SVG_NS, 'g');
 
-    const clipId = 'clip-' + (nodeEl.dataset.nodeId || Math.random().toString(36).slice(2));
-    const g = document.createElementNS(svgNs, 'g');
-
-    // Clipping rect to prevent overflow
-    const defs = document.createElementNS(svgNs, 'defs');
-    const clipPath = document.createElementNS(svgNs, 'clipPath');
+    const defs = document.createElementNS(SVG_NS, 'defs');
+    const clipPath = document.createElementNS(SVG_NS, 'clipPath');
     clipPath.setAttribute('id', clipId);
-    const clipRect = document.createElementNS(svgNs, 'rect');
+    const clipRect = document.createElementNS(SVG_NS, 'rect');
     clipRect.setAttribute('x', x);
     clipRect.setAttribute('y', y);
     clipRect.setAttribute('width', w);
     clipRect.setAttribute('height', h);
-    clipRect.setAttribute('rx', parseFloat(nodeStyle.borderRadius) || 8);
+    clipRect.setAttribute('rx', radius);
     clipPath.appendChild(clipRect);
     defs.appendChild(clipPath);
     g.appendChild(defs);
 
-    // Node background rect
-    const rect = document.createElementNS(svgNs, 'rect');
+    const rect = document.createElementNS(SVG_NS, 'rect');
     rect.setAttribute('x', x);
     rect.setAttribute('y', y);
     rect.setAttribute('width', w);
@@ -458,34 +566,26 @@ function buildNativeSvgNodes(svg, nodes, container) {
     rect.setAttribute('fill', nodeStyle.backgroundColor || '#ffffff');
     rect.setAttribute('stroke', parseBorderColor(nodeStyle.border) || '#d1d5db');
     rect.setAttribute('stroke-width', parseBorderWidth(nodeStyle.border) || '1');
-    rect.setAttribute('rx', parseFloat(nodeStyle.borderRadius) || 8);
-    rect.setAttribute('ry', parseFloat(nodeStyle.borderRadius) || 8);
+    rect.setAttribute('rx', radius);
     g.appendChild(rect);
 
-    // Clipped content group
-    const contentG = document.createElementNS(svgNs, 'g');
-    contentG.setAttribute('clip-path', `url(#${clipId})`);
-
+    const content = document.createElementNS(SVG_NS, 'g');
+    content.setAttribute('clip-path', `url(#${clipId})`);
     const { textBlocks, bgRects } = getNodeVisualData(nodeEl);
 
-    // Render background rects (colored headers, status dots, border-tops)
     bgRects.forEach(bg => {
-      const bgEl = document.createElementNS(svgNs, 'rect');
-      bgEl.setAttribute('x', x + bg.x);
-      bgEl.setAttribute('y', y + bg.y);
-      bgEl.setAttribute('width', bg.w);
-      bgEl.setAttribute('height', bg.h);
-      bgEl.setAttribute('fill', bg.bg);
-      if (bg.borderRadius > 0) {
-        bgEl.setAttribute('rx', bg.borderRadius);
-        bgEl.setAttribute('ry', bg.borderRadius);
-      }
-      contentG.appendChild(bgEl);
+      const el = document.createElementNS(SVG_NS, 'rect');
+      el.setAttribute('x', x + bg.x);
+      el.setAttribute('y', y + bg.y);
+      el.setAttribute('width', bg.w);
+      el.setAttribute('height', bg.h);
+      el.setAttribute('fill', bg.bg);
+      if (bg.borderRadius > 0) el.setAttribute('rx', bg.borderRadius);
+      content.appendChild(el);
     });
 
-    // Render text blocks at their actual positions
     textBlocks.forEach(tb => {
-      const text = document.createElementNS(svgNs, 'text');
+      const text = document.createElementNS(SVG_NS, 'text');
       text.setAttribute('x', x + tb.x);
       text.setAttribute('y', y + tb.y);
       text.setAttribute('fill', tb.color || '#333333');
@@ -493,17 +593,73 @@ function buildNativeSvgNodes(svg, nodes, container) {
       text.setAttribute('font-size', tb.fontSize || '14px');
       text.setAttribute('font-weight', tb.fontWeight || '400');
       text.textContent = tb.text;
-      contentG.appendChild(text);
+      content.appendChild(text);
     });
 
-    g.appendChild(contentG);
+    g.appendChild(content);
     svg.appendChild(g);
   });
 }
 
+function getNodeVisualData(nodeEl) {
+  const content = nodeEl.querySelector('.lf-node-content');
+  if (!content) return { textBlocks: [], bgRects: [] };
+
+  const nodeRectBox = nodeEl.getBoundingClientRect();
+  const zoom = nodeRectBox.width / (nodeEl.offsetWidth || 1);
+  const textBlocks = [];
+  const bgRects = [];
+
+  content.querySelectorAll('*').forEach(el => {
+    const style = getComputedStyle(el);
+    const bg = style.backgroundColor;
+    if (bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') {
+      const r = el.getBoundingClientRect();
+      if (r.width > 0 && r.height > 0) {
+        bgRects.push({
+          x: (r.left - nodeRectBox.left) / zoom,
+          y: (r.top - nodeRectBox.top) / zoom,
+          w: r.width / zoom,
+          h: r.height / zoom,
+          bg,
+          borderRadius: parseFloat(style.borderRadius) || 0,
+        });
+      }
+    }
+  });
+
+  const walker = document.createTreeWalker(content, NodeFilter.SHOW_TEXT, null);
+  let textNode;
+  while ((textNode = walker.nextNode())) {
+    const text = textNode.textContent.trim();
+    const parent = textNode.parentElement;
+    if (!text || !parent) continue;
+
+    const style = getComputedStyle(parent);
+    if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') continue;
+
+    const range = document.createRange();
+    range.selectNodeContents(textNode);
+    const cr = Array.from(range.getClientRects()).find(rect => rect.width > 0 && rect.height > 0);
+    if (!cr) continue;
+
+    textBlocks.push({
+      text: text.length <= 60 ? text : text.substring(0, 57) + '...',
+      x: (cr.left - nodeRectBox.left) / zoom,
+      y: (cr.top - nodeRectBox.top) / zoom + (cr.height / zoom) * 0.75,
+      fontSize: style.fontSize,
+      fontWeight: style.fontWeight,
+      fontFamily: style.fontFamily,
+      color: style.color,
+    });
+  }
+
+  return { textBlocks, bgRects };
+}
+
 function parseBorderColor(border) {
   if (!border) return null;
-  const match = border.match(/(?:rgb\([^)]+\)|rgba\([^)]+\)|#[0-9a-fA-F]+|\w+)$/);
+  const match = border.match(/(?:rgb\([^)]+\)|rgba\([^)]+\)|oklch\([^)]+\)|#[0-9a-fA-F]+|\w+)$/);
   return match ? match[0] : null;
 }
 
@@ -513,59 +669,7 @@ function parseBorderWidth(border) {
   return match ? match[1] : null;
 }
 
-/**
- * Exports the flow as a PNG blob via canvas rendering.
- * Uses native SVG elements (no foreignObject) to avoid tainted canvas.
- */
-export function exportPNG(container, scale = 2) {
-  return new Promise((resolve, reject) => {
-    const bounds = calculateBounds(container);
-    const svg = createBaseSvg(container, bounds, { nativeModeForPng: true });
-    if (!svg) {
-      reject(new Error('Could not generate SVG'));
-      return;
-    }
-
-    // Use native SVG elements for nodes (avoids canvas taint from foreignObject)
-    buildNativeSvgNodes(svg, null, container);
-
-    const serializer = new XMLSerializer();
-    const svgString = serializer.serializeToString(svg);
-
-    const canvas = document.createElement('canvas');
-    canvas.width = bounds.width * scale;
-    canvas.height = bounds.height * scale;
-    const ctx = canvas.getContext('2d');
-    ctx.scale(scale, scale);
-
-    const img = new Image();
-    const blob = new Blob([svgString], { type: 'image/svg+xml;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-
-    img.onload = () => {
-      ctx.drawImage(img, 0, 0);
-      URL.revokeObjectURL(url);
-      try {
-        canvas.toBlob((pngBlob) => {
-          if (pngBlob) {
-            resolve(pngBlob);
-          } else {
-            reject(new Error('Canvas toBlob returned null'));
-          }
-        }, 'image/png');
-      } catch (e) {
-        reject(new Error('Canvas export failed: ' + e.message));
-      }
-    };
-
-    img.onerror = () => {
-      URL.revokeObjectURL(url);
-      reject(new Error('Failed to render SVG to canvas'));
-    };
-
-    img.src = url;
-  });
-}
+// ===== Downloads =====
 
 /**
  * Downloads a blob as a file.
