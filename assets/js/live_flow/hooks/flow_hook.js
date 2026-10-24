@@ -1252,6 +1252,11 @@ export const LiveFlowHook = {
     const currentText = labelEl.textContent.trim();
 
     wrapper.classList.add('lf-edge-label-editing');
+    // Keep server patches (e.g. the selection update that follows the double
+    // click) away from the editor: morphdom would remove the focused input,
+    // Chrome fires blur during that removeChild and finish() detaching the
+    // input from the label then makes it throw NotFoundError
+    wrapper.setAttribute('phx-update', 'ignore');
     const input = document.createElement('input');
     input.type = 'text';
     input.className = 'lf-edge-label-input';
@@ -1268,6 +1273,7 @@ export const LiveFlowHook = {
       done = true;
       const newText = input.value.trim();
       wrapper.classList.remove('lf-edge-label-editing');
+      wrapper.removeAttribute('phx-update');
 
       if (commit && newText !== currentText) {
         this.pushEvent('lf:edge_label_change', { id: edgeId, label: newText || null });
