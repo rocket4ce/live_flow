@@ -1,7 +1,7 @@
 defmodule LiveFlow.MixProject do
   use Mix.Project
 
-  @version "0.2.4"
+  @version "0.3.0"
   @source_url "https://github.com/rocket4ce/live_flow"
 
   def project do
@@ -55,7 +55,7 @@ defmodule LiveFlow.MixProject do
         "Changelog" => "#{@source_url}/blob/main/CHANGELOG.md"
       },
       files:
-        ~w(assets/js assets/css lib priv/static) ++
+        ~w(assets/js assets/css lib priv/static priv/templates) ++
           ~w(CHANGELOG.md LICENSE.md mix.exs package.json README.md .formatter.exs)
     ]
   end
@@ -68,8 +68,16 @@ defmodule LiveFlow.MixProject do
         "CHANGELOG.md",
         "guides/getting-started.md",
         "guides/custom-nodes.md",
+        "guides/edges.md",
+        "guides/interaction.md",
+        "guides/events.md",
+        "guides/subflows.md",
+        "guides/layout.md",
+        "guides/components.md",
+        "guides/export.md",
         "guides/collaboration.md",
-        "guides/themes.md"
+        "guides/themes.md",
+        "LICENSE.md"
       ],
       groups_for_extras: [
         Guides: ~r/guides\/.*/
@@ -88,14 +96,16 @@ defmodule LiveFlow.MixProject do
           LiveFlow.Components.Edge,
           LiveFlow.Components.Handle,
           LiveFlow.Components.Marker,
-          LiveFlow.Components.NodeResizer
+          LiveFlow.Components.NodeResizer,
+          LiveFlow.Components.NodeToolbar
         ],
         "Path Algorithms": [
           LiveFlow.Paths.Bezier,
           LiveFlow.Paths.Straight,
           LiveFlow.Paths.Step,
           LiveFlow.Paths.Smoothstep,
-          LiveFlow.Paths.Path
+          LiveFlow.Paths.Path,
+          LiveFlow.Paths.Geometry
         ],
         "Viewport & Performance": [
           LiveFlow.Viewport,
@@ -105,6 +115,7 @@ defmodule LiveFlow.MixProject do
           LiveFlow.History,
           LiveFlow.Clipboard,
           LiveFlow.Serializer,
+          LiveFlow.Export,
           LiveFlow.Layout,
           LiveFlow.Validation,
           LiveFlow.Validation.Connection

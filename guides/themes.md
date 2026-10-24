@@ -92,18 +92,21 @@ LiveFlow provides a Tailwind CSS v4 plugin that registers themes using the
 
 ### Registering Themes
 
-In your CSS file, import the themes you want:
+In your CSS file, import the themes you want (paths are relative to
+`assets/css/app.css`):
 
 ```css
 /* assets/css/app.css */
-@import "live_flow/live_flow.css";
+@import "../../deps/live_flow/assets/css/live_flow.css";
 
 /* Register specific themes */
-@plugin "../js/live_flow/liveflow-theme" { name: "light"; default: true; }
-@plugin "../js/live_flow/liveflow-theme" { name: "dark"; prefersdark: true; }
-@plugin "../js/live_flow/liveflow-theme" { name: "ocean"; }
-@plugin "../js/live_flow/liveflow-theme" { name: "synthwave"; }
+@plugin "../../deps/live_flow/assets/js/live_flow/liveflow-theme" { name: "light"; default: true; }
+@plugin "../../deps/live_flow/assets/js/live_flow/liveflow-theme" { name: "dark"; prefersdark: true; }
+@plugin "../../deps/live_flow/assets/js/live_flow/liveflow-theme" { name: "ocean"; }
+@plugin "../../deps/live_flow/assets/js/live_flow/liveflow-theme" { name: "synthwave"; }
 ```
+
+Only registered themes are generated, so register every theme you pass as `theme:`.
 
 ### Plugin Options
 
@@ -111,31 +114,31 @@ In your CSS file, import the themes you want:
 |--------|-------------|
 | `name` | Theme name (required). Must match a built-in theme or define custom variables. |
 | `default` | Set `true` to make this the default theme (uses low-specificity `:where()` selector). |
-| `prefersdark` | Set `true` to activate under `@media (prefers-color-scheme: dark)`. |
+| `prefersdark` | Set `true` to also apply this theme to every flow under `@media (prefers-color-scheme: dark)`. |
 
 ### How It Works
 
 The plugin generates scoped CSS like:
 
 ```css
-/* default: true */
-:where(.lf-container) {
-  --lf-background: #ffffff;
+/* default: true -- also usable by name */
+:where(.lf-container), .lf-container[data-lf-theme="light"] {
+  --lf-background: #f8f8f8;
   --lf-node-bg: #ffffff;
   /* ... */
 }
 
 /* Named theme */
 .lf-container[data-lf-theme="dark"] {
-  --lf-background: #1a1a2e;
-  --lf-node-bg: #16213e;
+  --lf-background: #1a1a1a;
+  --lf-node-bg: #2d2d2d;
   /* ... */
 }
 
 /* prefersdark: true */
 @media (prefers-color-scheme: dark) {
-  .lf-container:not([data-lf-theme]) {
-    --lf-background: #1a1a2e;
+  .lf-container {
+    --lf-background: #1a1a1a;
     /* ... */
   }
 }
@@ -143,14 +146,17 @@ The plugin generates scoped CSS like:
 
 ## CSS Custom Properties
 
-LiveFlow themes are built on CSS custom properties. Here are the key variables:
+LiveFlow themes are built on CSS custom properties. Every theme sets all of them;
+the defaults live in `live_flow.css`.
 
 ### Canvas
 
 | Variable | Description |
 |----------|-------------|
 | `--lf-background` | Canvas background color |
-| `--lf-dots-color` | Background pattern dot/line color |
+| `--lf-background-dots-color` | Dots pattern color (`background: :dots`) |
+| `--lf-background-lines-color` | Lines pattern color (`background: :lines`) |
+| `--lf-background-cross-color` | Cross pattern color (`background: :cross`) |
 
 ### Nodes
 
@@ -158,41 +164,49 @@ LiveFlow themes are built on CSS custom properties. Here are the key variables:
 |----------|-------------|
 | `--lf-node-bg` | Node background color |
 | `--lf-node-border` | Node border color |
-| `--lf-node-border-selected` | Node border color when selected |
-| `--lf-node-shadow` | Node box shadow |
 | `--lf-node-border-radius` | Node border radius |
+| `--lf-node-shadow` / `--lf-node-shadow-hover` | Node box shadow, and on hover |
+| `--lf-node-selected-border` | Border color of selected nodes |
+| `--lf-node-selected-shadow` | Ring around selected nodes |
 
 ### Edges
 
 | Variable | Description |
 |----------|-------------|
-| `--lf-edge-stroke` | Edge line color |
-| `--lf-edge-stroke-selected` | Edge color when selected |
-| `--lf-edge-label-bg` | Edge label background |
-| `--lf-edge-label-color` | Edge label text color |
+| `--lf-edge-stroke` | Edge color (default markers follow it) |
+| `--lf-edge-stroke-width` | Edge width |
+| `--lf-edge-stroke-selected` | Color of selected edges (and reconnect handles) |
+| `--lf-edge-stroke-animated` | Color of animated edges |
 
 ### Handles
 
 | Variable | Description |
 |----------|-------------|
+| `--lf-handle-size` | Handle diameter |
 | `--lf-handle-bg` | Handle fill color |
-| `--lf-handle-border` | Handle border color |
+| `--lf-handle-border` / `--lf-handle-border-width` | Handle border |
+| `--lf-handle-hover-bg` | Handle fill on hover and while connecting |
 
-### Text
+### Text and Surfaces
 
 | Variable | Description |
 |----------|-------------|
 | `--lf-text-primary` | Primary text color |
-| `--lf-text-muted` | Secondary/muted text color |
+| `--lf-text-secondary` | Secondary text color |
+| `--lf-text-muted` | Muted text color |
+| `--lf-surface-secondary` | Secondary surface (panels, headers) |
+| `--lf-border-secondary` | Secondary border color |
 
 ### UI Controls
 
 | Variable | Description |
 |----------|-------------|
-| `--lf-controls-bg` | Controls panel background |
-| `--lf-controls-border` | Controls panel border |
-| `--lf-minimap-bg` | Minimap background |
-| `--lf-minimap-mask` | Minimap mask overlay color |
+| `--lf-controls-bg` / `--lf-controls-border` | Controls panel background and border |
+| `--lf-controls-color` / `--lf-controls-button-hover` | Controls icon color and button hover background |
+| `--lf-minimap-bg` / `--lf-minimap-border` | Minimap background and border |
+| `--lf-minimap-node-bg` | Minimap node color (unless `minimap_node_color` is set) |
+| `--lf-minimap-viewport-border` | Minimap viewport outline |
+| `--lf-delete-hover-bg` / `--lf-delete-hover-color` / `--lf-delete-hover-border` | Delete buttons on hover |
 
 ### Interaction
 
@@ -200,24 +214,25 @@ LiveFlow themes are built on CSS custom properties. Here are the key variables:
 |----------|-------------|
 | `--lf-selection-bg` | Selection box fill color |
 | `--lf-selection-border` | Selection box border color |
-| `--lf-accent` | General accent/highlight color |
-| `--lf-helper-line-color` | Alignment guide line color |
+| `--lf-helper-line-color` | Alignment guide line color (`helper_lines: true`) |
 
 ## Creating Custom Themes
 
 ### Method 1: Override via the Plugin
 
-Pass custom variable values alongside a built-in theme name:
+Pass custom variable values to the plugin. With a new name you get a new theme
+(variables you don't set keep the `live_flow.css` defaults); with a built-in name
+your values override that theme:
 
 ```css
-@plugin "../js/live_flow/liveflow-theme" {
+@plugin "../../deps/live_flow/assets/js/live_flow/liveflow-theme" {
   name: "my-brand";
   --lf-background: #0a1929;
   --lf-node-bg: #0d2137;
   --lf-node-border: #1e3a5f;
+  --lf-node-selected-border: #00bcd4;
   --lf-edge-stroke: #4fc3f7;
   --lf-text-primary: #e0e0e0;
-  --lf-accent: #00bcd4;
 }
 ```
 
@@ -230,7 +245,7 @@ Define variables directly in CSS, scoped to the theme attribute:
   --lf-background: #1a1a2e;
   --lf-node-bg: #16213e;
   --lf-node-border: #0f3460;
-  --lf-node-border-selected: #e94560;
+  --lf-node-selected-border: #e94560;
   --lf-node-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
   --lf-node-border-radius: 12px;
   --lf-edge-stroke: #533483;
@@ -239,13 +254,12 @@ Define variables directly in CSS, scoped to the theme attribute:
   --lf-handle-border: #0f3460;
   --lf-text-primary: #eaeaea;
   --lf-text-muted: #a0a0a0;
-  --lf-dots-color: rgba(255, 255, 255, 0.08);
+  --lf-background-dots-color: rgba(255, 255, 255, 0.08);
   --lf-controls-bg: #16213e;
   --lf-controls-border: #0f3460;
   --lf-minimap-bg: #16213e;
   --lf-selection-bg: rgba(233, 69, 96, 0.1);
   --lf-selection-border: #e94560;
-  --lf-accent: #e94560;
 }
 ```
 
@@ -262,23 +276,24 @@ theme. LiveFlow provides automatic dark mode support that responds to your
 application-level theme:
 
 ```css
-/* App-level dark mode activates LiveFlow dark theme */
-[data-theme="dark"] .lf-container:not([data-lf-theme]) {
-  --lf-background: #1a1a2e;
-  --lf-node-bg: #16213e;
+/* Built into live_flow.css */
+[data-theme="dark"] .lf-container:not([data-lf-theme]),
+.dark .lf-container:not([data-lf-theme]) {
+  --lf-background: #1a1a1a;
+  --lf-node-bg: #2d2d2d;
   /* ... dark variables ... */
 }
 ```
 
-This means if your Phoenix app uses `data-theme="dark"` on the `<html>` or `<body>`
-element (common with daisyUI), LiveFlow automatically switches to dark mode without
-needing an explicit theme assignment.
+This means if your Phoenix app uses `data-theme="dark"` (common with daisyUI) or a
+`dark` class on an ancestor such as `<html>`, flows without an explicit theme switch
+to dark mode automatically.
 
 You can also use the `prefersdark` plugin option to respond to the system-level
 dark mode preference:
 
 ```css
-@plugin "../js/live_flow/liveflow-theme" { name: "dark"; prefersdark: true; }
+@plugin "../../deps/live_flow/assets/js/live_flow/liveflow-theme" { name: "dark"; prefersdark: true; }
 ```
 
 ## Tips
@@ -290,6 +305,8 @@ dark mode preference:
   Your custom CSS with the same or higher specificity will override.
 - **CSS fallbacks**: LiveFlow's base stylesheet (`live_flow.css`) includes fallback
   values in `@layer base`. The plugin themes override these because `addBase()`
-  outputs to `@layer base` with higher source order.
+  outputs to `@layer base` with higher source order. The rest of the library CSS
+  lives in `@layer components`, so your own unlayered CSS and Tailwind utilities
+  override it without `!important`.
 - **Custom nodes**: Use `var(--lf-text-primary)` and other variables in your custom
   node components for automatic theme support (see [Custom Nodes](custom-nodes.md)).
