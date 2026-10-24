@@ -123,24 +123,25 @@ end
 
 ### What the Function Receives
 
-The function component receives assigns containing:
+The function component receives a single assign, `node`: the full `LiveFlow.Node`
+struct, including:
 
-- `assigns.node` -- the full `LiveFlow.Node` struct, including:
-  - `node.id` -- the node ID
-  - `node.data` -- your custom data map
-  - `node.type` -- the type atom
-  - `node.position` -- `%{x, y}`
-  - `node.selected` -- boolean
-  - `node.dragging` -- boolean
-  - `node.handles` -- list of `Handle` structs
+- `node.id` -- the node ID
+- `node.data` -- your custom data map
+- `node.type` -- the type atom
+- `node.position` -- `%{x, y}` (relative to the parent for child nodes)
+- `node.selected`, `node.dragging`, `node.resizing` -- booleans
+- `node.width` / `node.height` -- measured (or explicit) size, `nil` before the first measure
+- `node.parent_id`, `node.hidden`, `node.handles`, ...
+
+The function is called again whenever the node changes (data, selection, position),
+so the content always reflects the current state.
 
 ### Important Notes for Function Components
 
-- Access data with `Map.get/3` for resilience against atom/string key mismatches
-  (imported JSON uses string keys):
-  ```elixir
-  label = Map.get(assigns.node.data, :label) || Map.get(assigns.node.data, "label", "Default")
-  ```
+- Access optional data with `Map.get/3`. If you load flows from JSON, atom values
+  in `data` come back as strings (`:violet` becomes `"violet"`), see
+  [Export](export.md#types-after-a-round-trip).
 - Use `var(--lf-text-primary)`, `var(--lf-text-muted)`, etc. in inline styles
   for theme compatibility.
 - LiveFlow wraps your component in a `NodeWrapper` that provides the outer card
@@ -215,7 +216,8 @@ node_types: %{
 
 Handles (connection points) are defined on the `Node` struct, not in the custom
 renderer. LiveFlow's `NodeWrapper` renders handles automatically based on the
-node's `handles` list:
+node's `handles` list (a connectable node without handles gets a target on the left
+and a source on the right):
 
 ```elixir
 Node.new("my-node", %{x: 0, y: 0}, %{label: "Multi-handle"},
@@ -236,6 +238,7 @@ Handle.new(:source, :right,
   id: "output-1",             # Unique ID within the node
   connectable: true,          # Whether connections can be made
   connect_type: :data,        # Type constraint for validation
+  offset: 0.25,               # Position along the side, 0.0..1.0 (default 0.5)
   class: "my-custom-class",   # Additional CSS class
   style: %{}                  # Inline styles
 )
@@ -243,12 +246,20 @@ Handle.new(:source, :right,
 
 ### Handle Positions
 
-Handles can be placed at four positions on the node:
+Handles can be placed on the four sides of the node: `:top`, `:bottom`, `:left`
+and `:right`. They are centered on their side unless `offset:` says otherwise, so
+several handles can share a side:
 
-- `:top` -- centered on the top edge
-- `:bottom` -- centered on the bottom edge
-- `:left` -- centered on the left edge
-- `:right` -- centered on the right edge
+```elixir
+handles: [
+  Handle.target(:left),
+  Handle.source(:right, id: "yes", offset: 0.3),
+  Handle.source(:right, id: "no", offset: 0.7)
+]
+```
+
+Edges attach exactly at the handle, on the server, in the browser and in exports.
+More in [Edges](edges.md#handles).
 
 ### Handle Shorthands
 
@@ -280,15 +291,46 @@ With this setup:
 
 ## Interactive Elements Inside Nodes
 
-By default, mouse events on nodes trigger dragging. To make buttons, inputs,
-or other interactive elements work inside a custom node, add the `nodrag` CSS class:
+Pressing on a node starts a drag. Buttons, links, inputs, selects, textareas and
+`contenteditable` elements are excluded automatically, and keyboard shortcuts
+(Backspace, Ctrl/Cmd+Z, ...) are ignored while typing in them. For other elements,
+use these classes:
+
+| Class | Effect |
+|-------|--------|
+| `nodrag` | Pressing the element doesn't drag the node |
+| `nopan` | Dragging on the element doesn't pan the viewport |
+| `nowheel` | The wheel scrolls the element instead of zooming the flow |
 
 ```heex
-<button class="nodrag" phx-click="my-action">Click me</button>
-<input class="nodrag" type="text" />
+<div class="nodrag nowheel max-h-40 overflow-y-auto">
+  <p :for={line <- @node.data.lines}>{line}</p>
+</div>
 ```
 
-The `nodrag` class tells the drag handler to ignore mousedown events on that element.
+### Drag Handles
+
+To drag a node only from part of it (a title bar, a grip icon), set `drag_handle` to a
+CSS selector:
+
+```elixir
+Node.new("panel", %{x: 0, y: 0}, %{title: "Settings"}, type: :panel, drag_handle: ".drag-grip")
+```
+
+```heex
+<div class="drag-grip cursor-grab">{@node.data.title}</div>
+<div class="p-3">... the rest doesn't start a drag ...</div>
+```
+
+## Toolbars, Resizing and Size
+
+- `LiveFlow.Components.NodeToolbar` shows actions next to the selected node and
+  `LiveFlow.Components.NodeResizer` adds resize handles; see
+  [Components](components.md).
+- Nodes are measured in the browser. To give a node a fixed size, pass `width:` and
+  `height:` to `LiveFlow.Node.new/4` and render content that fills it (`h-full w-full`).
+- The wrapper gets the `lf-node-selected` class and `data-selected="true"` while
+  selected, and `data-node-type` with the node type, handy for CSS.
 
 ## Styling with Theme Variables
 
@@ -297,12 +339,14 @@ Use LiveFlow CSS custom properties in your custom nodes for automatic theme supp
 | Variable | Description |
 |----------|-------------|
 | `--lf-text-primary` | Primary text color |
-| `--lf-text-muted` | Secondary/muted text color |
+| `--lf-text-secondary` | Secondary text color |
+| `--lf-text-muted` | Muted text color |
 | `--lf-node-bg` | Node background color |
 | `--lf-node-border` | Node border color |
 | `--lf-node-border-radius` | Node border radius |
+| `--lf-node-selected-border` | Border color of selected nodes (a good accent color) |
+| `--lf-surface-secondary` | Secondary surface (e.g. a node header) |
 | `--lf-border-secondary` | Secondary border color |
-| `--lf-accent` | Accent/highlight color |
 
 Example:
 

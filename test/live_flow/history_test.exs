@@ -11,7 +11,6 @@ defmodule LiveFlow.HistoryTest do
     Node.new(id, %{x: x, y: y}, %{label: id})
   end
 
-
   describe "new/1" do
     test "creates empty history with default max_entries" do
       h = History.new()
@@ -99,6 +98,7 @@ defmodule LiveFlow.HistoryTest do
 
     test "clears selection on restore" do
       flow1 = make_state([make_node("n1")])
+
       flow2 =
         make_state([make_node("n1"), make_node("n2")])
         |> State.select_node("n1")

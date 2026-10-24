@@ -46,9 +46,10 @@ defmodule LiveFlow.Components.Handle do
       data-handle-id={@handle_id}
       data-handle-type={@type}
       data-handle-position={@position}
-      data-handle-connectable={@connectable}
+      data-handle-connectable={to_string(@connectable)}
       data-handle-connect-type={Map.get(@handle, :connect_type)}
       data-node-id={@node_id}
+      data-handle-offset={@handle.offset}
       style={handle_style(@handle)}
     >
     </div>
@@ -95,11 +96,17 @@ defmodule LiveFlow.Components.Handle do
     """
   end
 
-  defp handle_style(%LiveFlow.Handle{style: style}) when map_size(style) == 0, do: nil
+  defp handle_style(%LiveFlow.Handle{style: style, offset: offset, position: position}) do
+    offset_style =
+      case {offset, position} do
+        {nil, _} -> []
+        {offset, side} when side in [:left, :right] -> ["top: #{offset * 100}%"]
+        {offset, _} -> ["left: #{offset * 100}%"]
+      end
 
-  defp handle_style(%LiveFlow.Handle{style: style}) do
-    style
-    |> Enum.map(fn {k, v} -> "#{k}: #{v}" end)
-    |> Enum.join("; ")
+    case offset_style ++ Enum.map(style, fn {k, v} -> "#{k}: #{v}" end) do
+      [] -> nil
+      parts -> Enum.join(parts, "; ")
+    end
   end
 end

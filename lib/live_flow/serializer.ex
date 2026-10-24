@@ -40,8 +40,10 @@ defmodule LiveFlow.Serializer do
   def export(%State{} = flow) do
     %{
       "version" => @version,
-      "nodes" => flow.nodes |> Map.values() |> Enum.sort_by(& &1.id) |> Enum.map(&serialize_node/1),
-      "edges" => flow.edges |> Map.values() |> Enum.sort_by(& &1.id) |> Enum.map(&serialize_edge/1),
+      "nodes" =>
+        flow.nodes |> Map.values() |> Enum.sort_by(& &1.id) |> Enum.map(&serialize_node/1),
+      "edges" =>
+        flow.edges |> Map.values() |> Enum.sort_by(& &1.id) |> Enum.map(&serialize_edge/1),
       "viewport" => serialize_viewport(flow.viewport)
     }
   end
@@ -92,6 +94,7 @@ defmodule LiveFlow.Serializer do
       "handles" => Enum.map(node.handles, &serialize_handle/1)
     }
     |> put_if("parent_id", node.parent_id)
+    |> put_if("extent", if(node.extent == :parent, do: "parent"))
     |> put_if("style", node.style, %{})
     |> put_if("class", node.class)
     |> put_unless("draggable", node.draggable, true)
@@ -99,6 +102,10 @@ defmodule LiveFlow.Serializer do
     |> put_unless("selectable", node.selectable, true)
     |> put_unless("deletable", node.deletable, true)
     |> put_unless("hidden", node.hidden, false)
+    |> put_unless("resizable", node.resizable, false)
+    |> put_if("drag_handle", node.drag_handle)
+    |> put_if("width", if(node.resizable, do: node.width))
+    |> put_if("height", if(node.resizable, do: node.height))
     |> put_unless("z_index", node.z_index, 0)
   end
 
@@ -115,7 +122,11 @@ defmodule LiveFlow.Serializer do
     |> put_if("target_handle", edge.target_handle)
     |> put_if("label", edge.label)
     |> put_if("marker_start", serialize_marker(edge.marker_start))
-    |> put_if_changed("marker_end", serialize_marker(edge.marker_end), serialize_marker(%{type: :arrow}))
+    |> put_if_changed(
+      "marker_end",
+      serialize_marker(edge.marker_end),
+      serialize_marker(%{type: :arrow})
+    )
     |> put_if("style", edge.style, %{})
     |> put_if("class", edge.class)
     |> put_if("data", serialize_map(edge.data), %{})
@@ -127,6 +138,9 @@ defmodule LiveFlow.Serializer do
     |> put_unless("label_position", edge.label_position, 0.5)
     |> put_if("label_style", serialize_map(edge.label_style), %{})
     |> put_if("path_options", serialize_map(edge.path_options), %{})
+    |> put_unless("source_floating", edge.source_floating, false)
+    |> put_unless("target_floating", edge.target_floating, false)
+    |> put_unless("reconnectable", edge.reconnectable, false)
   end
 
   # === Handle Serialization ===
@@ -194,7 +208,13 @@ defmodule LiveFlow.Serializer do
         connectable: Map.get(data, "connectable", true),
         selectable: Map.get(data, "selectable", true),
         deletable: Map.get(data, "deletable", true),
+        hidden: Map.get(data, "hidden", false),
+        resizable: Map.get(data, "resizable", false),
+        drag_handle: data["drag_handle"],
+        width: data["width"],
+        height: data["height"],
         parent_id: data["parent_id"],
+        extent: if(data["extent"] == "parent", do: :parent),
         style: data["style"] || %{},
         class: data["class"],
         z_index: Map.get(data, "z_index", 0)
@@ -227,7 +247,10 @@ defmodule LiveFlow.Serializer do
         z_index: Map.get(data, "z_index", 0),
         label_position: Map.get(data, "label_position", 0.5),
         label_style: data["label_style"] || %{},
-        path_options: data["path_options"] || %{}
+        path_options: data["path_options"] || %{},
+        source_floating: Map.get(data, "source_floating", false),
+        target_floating: Map.get(data, "target_floating", false),
+        reconnectable: Map.get(data, "reconnectable", false)
       ]
       |> Enum.reject(fn {_k, v} -> is_nil(v) end)
 

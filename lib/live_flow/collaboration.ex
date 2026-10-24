@@ -56,7 +56,8 @@ defmodule LiveFlow.Collaboration do
 
   use Phoenix.Component
 
-  alias LiveFlow.{State, Edge}
+  alias LiveFlow.{State, Edge, Node}
+  alias LiveFlow.Changes.NodeChange
   alias LiveFlow.Collaboration.User
 
   @doc """
@@ -218,14 +219,16 @@ defmodule LiveFlow.Collaboration do
   @spec handle_info(term(), Phoenix.LiveView.Socket.t()) ::
           {:ok, Phoenix.LiveView.Socket.t()} | :ignore
   # Safety: skip own messages (broadcast_from should already exclude self)
-  def handle_info({:lf_flow_change, sender_id, _change}, %{assigns: %{lf_user: %{id: sender_id}}}), do: :ignore
+  def handle_info({:lf_flow_change, sender_id, _change}, %{assigns: %{lf_user: %{id: sender_id}}}),
+      do: :ignore
 
   def handle_info({:lf_flow_change, _sender_id, change}, socket) do
     flow = apply_remote_change(socket.assigns.flow, change)
     {:ok, Phoenix.Component.assign(socket, flow: flow)}
   end
 
-  def handle_info({:lf_drag_move, sender_id, _changes}, %{assigns: %{lf_user: %{id: sender_id}}}), do: :ignore
+  def handle_info({:lf_drag_move, sender_id, _changes}, %{assigns: %{lf_user: %{id: sender_id}}}),
+    do: :ignore
 
   def handle_info({:lf_drag_move, _sender_id, changes}, socket) do
     # Push directly to client for DOM-only update (no flow state change, no re-render)
@@ -233,7 +236,8 @@ defmodule LiveFlow.Collaboration do
     {:ok, socket}
   end
 
-  def handle_info({:lf_cursor_move, sender_id, _cursor}, %{assigns: %{lf_user: %{id: sender_id}}}), do: :ignore
+  def handle_info({:lf_cursor_move, sender_id, _cursor}, %{assigns: %{lf_user: %{id: sender_id}}}),
+      do: :ignore
 
   def handle_info({:lf_cursor_move, sender_id, cursor}, socket) do
     socket =
@@ -277,13 +281,35 @@ defmodule LiveFlow.Collaboration do
   Applies a remote change to the local flow state.
 
   This is a pure function — it takes a flow and a change tuple,
-  and returns the updated flow.
+  and returns the updated flow. Supported changes:
+
+    * `{:node_changes, changes}` - `lf:node_change` payloads (position,
+      dimensions, resize, add, replace, remove). Selection changes are
+      ignored: every user keeps their own selection.
+    * `{:node_add, node}`, `{:node_update, id, attrs}`, `{:node_remove, id}`
+    * `{:edge_add, edge}`, `{:edge_update, id, attrs}`, `{:edge_remove, id}`
+    * `{:edge_reconnect, params}` - `lf:reconnect_edge` params
+    * `{:delete_selected, node_ids, edge_ids}`
+    * `{:flow_reset, flow}`
+
+  Unknown changes leave the flow untouched.
   """
   @spec apply_remote_change(State.t(), tuple()) :: State.t()
   def apply_remote_change(flow, {:node_changes, changes}) do
-    Enum.reduce(changes, flow, fn change, acc ->
-      apply_node_change(acc, change)
-    end)
+    changes = Enum.reject(changes, &select_change?/1)
+    NodeChange.apply_changes(flow, changes)
+  end
+
+  def apply_remote_change(flow, {:node_add, %Node{} = node}) do
+    State.add_node(flow, node)
+  end
+
+  def apply_remote_change(flow, {:node_update, id, attrs}) do
+    State.update_node(flow, id, attrs)
+  end
+
+  def apply_remote_change(flow, {:node_remove, id}) do
+    State.remove_node(flow, id)
   end
 
   def apply_remote_change(flow, {:edge_add, %Edge{} = edge}) do
@@ -292,6 +318,14 @@ defmodule LiveFlow.Collaboration do
 
   def apply_remote_change(flow, {:edge_remove, id}) do
     State.remove_edge(flow, id)
+  end
+
+  def apply_remote_change(flow, {:edge_update, id, attrs}) do
+    State.update_edge(flow, id, attrs)
+  end
+
+  def apply_remote_change(flow, {:edge_reconnect, params}) do
+    State.reconnect_edge(flow, params)
   end
 
   def apply_remote_change(flow, {:delete_selected, node_ids, edge_ids}) do
@@ -361,42 +395,7 @@ defmodule LiveFlow.Collaboration do
 
   # Private helpers
 
-  defp apply_node_change(flow, %{"type" => "position", "id" => id, "position" => pos} = change) do
-    case Map.get(flow.nodes, id) do
-      nil ->
-        flow
-
-      node ->
-        updated = %{
-          node
-          | position: %{x: pos["x"] / 1, y: pos["y"] / 1},
-            dragging: Map.get(change, "dragging", false)
-        }
-
-        %{flow | nodes: Map.put(flow.nodes, id, updated)}
-    end
-  end
-
-  defp apply_node_change(flow, %{"type" => "dimensions", "id" => id} = change) do
-    case Map.get(flow.nodes, id) do
-      nil ->
-        flow
-
-      node ->
-        updated = %{
-          node
-          | width: Map.get(change, "width"),
-            height: Map.get(change, "height"),
-            measured: true
-        }
-
-        %{flow | nodes: Map.put(flow.nodes, id, updated)}
-    end
-  end
-
-  defp apply_node_change(flow, %{"type" => "remove", "id" => id}) do
-    State.remove_node(flow, id)
-  end
-
-  defp apply_node_change(flow, _change), do: flow
+  defp select_change?(%{"type" => "select"}), do: true
+  defp select_change?(%{type: type}), do: type in [:select, "select"]
+  defp select_change?(_change), do: false
 end

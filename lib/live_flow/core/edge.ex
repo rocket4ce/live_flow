@@ -61,7 +61,10 @@ defmodule LiveFlow.Edge do
           class: String.t() | nil,
           z_index: integer(),
           interaction_width: integer(),
-          path_options: map()
+          path_options: map(),
+          source_floating: boolean(),
+          target_floating: boolean(),
+          reconnectable: boolean()
         }
 
   defstruct [
@@ -86,7 +89,10 @@ defmodule LiveFlow.Edge do
     style: %{},
     z_index: 0,
     interaction_width: 20,
-    path_options: %{}
+    path_options: %{},
+    source_floating: false,
+    target_floating: false,
+    reconnectable: false
   ]
 
   @doc """
@@ -137,7 +143,10 @@ defmodule LiveFlow.Edge do
       class: Keyword.get(opts, :class),
       z_index: Keyword.get(opts, :z_index, 0),
       data: Keyword.get(opts, :data, %{}),
-      path_options: Keyword.get(opts, :path_options, %{})
+      path_options: Keyword.get(opts, :path_options, %{}),
+      source_floating: Keyword.get(opts, :source_floating, false),
+      target_floating: Keyword.get(opts, :target_floating, false),
+      reconnectable: Keyword.get(opts, :reconnectable, false)
     }
   end
 

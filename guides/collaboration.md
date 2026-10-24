@@ -96,31 +96,37 @@ def handle_info(msg, socket) do
 end
 ```
 
-`Collaboration.handle_info/2` handles three message types:
+`Collaboration.handle_info/2` handles these messages and returns `:ignore` for
+anything else:
 
 | Message | Description |
 |---------|-------------|
-| `{:lf_flow_change, sender_id, change}` | Another user modified the flow |
-| `{:lf_cursor_move, sender_id, cursor_data}` | Another user moved their cursor |
-| `%Phoenix.Socket.Broadcast{event: "presence_diff"}` | A user joined or left |
+| `{:lf_flow_change, sender_id, change}` | Another user modified the flow: applied with `apply_remote_change/2` and assigned to `:flow` |
+| `{:lf_drag_move, sender_id, changes}` | Another user is dragging nodes: pushed to the browser as `lf:remote_drag` |
+| `{:lf_cursor_move, sender_id, cursor_data}` | Another user moved their cursor: pushed as `lf:remote_cursor` |
+| `%Phoenix.Socket.Broadcast{event: "presence_diff"}` | A user joined or left: updates `:lf_presences` |
 
-Messages from the current user (matching `sender_id`) are automatically ignored
-to prevent echo loops.
+Changes are broadcast with `Phoenix.PubSub.broadcast_from/4`, so a user never
+receives their own changes.
 
 ### 3. Broadcast Changes
 
 When the local user modifies the flow, broadcast the change so other users see it:
 
 ```elixir
+alias LiveFlow.Changes.NodeChange
+
 @impl true
 def handle_event("lf:node_change", %{"changes" => changes}, socket) do
-  flow =
-    Enum.reduce(changes, socket.assigns.flow, fn change, acc ->
-      apply_node_change(acc, change)
-    end)
+  flow = NodeChange.apply_changes(socket.assigns.flow, changes)
 
-  # Broadcast to other users
-  socket = Collaboration.broadcast_change(socket, {:node_changes, changes})
+  # Every browser measures its own nodes: share moves, resizes and removals only
+  shared = Enum.filter(changes, &(&1["type"] in ~w(position resize remove)))
+
+  socket =
+    if shared == [],
+      do: socket,
+      else: Collaboration.broadcast_change(socket, {:node_changes, shared})
 
   {:noreply, assign(socket, flow: flow)}
 end
@@ -153,13 +159,65 @@ end
 
 ### Supported Change Types
 
+`LiveFlow.Collaboration.apply_remote_change/2` understands these changes:
+
 | Change Tuple | Description |
 |-------------|-------------|
-| `{:node_changes, changes}` | Node position, dimension, or removal changes |
+| `{:node_changes, changes}` | `lf:node_change` change maps (position, dimensions, resize, add, replace, remove). Selection changes are ignored: every user keeps their own selection |
+| `{:node_add, %Node{}}` | A node was added |
+| `{:node_update, id, attrs}` | A node was updated (`attrs` as in `LiveFlow.State.update_node/3`) |
+| `{:node_remove, id}` | A node (and its children) was removed |
 | `{:edge_add, %Edge{}}` | A new edge was created |
+| `{:edge_update, id, attrs}` | An edge was updated, e.g. `[label: "next"]` |
 | `{:edge_remove, edge_id}` | An edge was removed |
+| `{:edge_reconnect, params}` | An edge was reconnected (the `lf:reconnect_edge` params) |
 | `{:delete_selected, node_ids, edge_ids}` | Bulk deletion of selected elements |
 | `{:flow_reset, %State{}}` | The entire flow was replaced |
+
+Unknown changes leave the flow untouched. For your own change types, match
+`{:lf_flow_change, _sender, {:my_change, ...}}` in `handle_info/2` before delegating
+to `Collaboration.handle_info/2`.
+
+A convenient pattern is a `commit/2` helper that applies a change locally and
+broadcasts the same tuple, so both sides run the same code:
+
+```elixir
+defp commit(socket, change) do
+  socket
+  |> assign(:flow, Collaboration.apply_remote_change(socket.assigns.flow, change))
+  |> Collaboration.broadcast_change(change)
+end
+
+def handle_event("lf:edge_label_change", %{"id" => id, "label" => label}, socket) do
+  {:noreply, commit(socket, {:edge_update, id, [label: label]})}
+end
+
+def handle_event("lf:reconnect_edge", params, socket) do
+  {:noreply, commit(socket, {:edge_reconnect, params})}
+end
+```
+
+### Live Dragging
+
+`lf:node_change` only reports where a drag starts and ends. To show other users the
+nodes moving, relay the throttled `lf:drag_move` events:
+
+```elixir
+def handle_event("lf:drag_move", %{"changes" => changes}, socket) do
+  {:noreply, Collaboration.broadcast_drag_move(socket, changes)}
+end
+```
+
+Receivers move the nodes in the browser only (`lf:remote_drag`, interpolated for
+smooth movement), without touching their state or re-rendering; the final position
+arrives with the `{:node_changes, ...}` broadcast of the drop.
+
+### Shared State
+
+PubSub only carries changes. Users joining later need the current flow, so keep it
+somewhere shared (a GenServer, an Agent, ETS or your database), update it on every
+change and read it in `mount/3`. The showcase page `/examples/interaction/collaborative`
+keeps it in an Agent.
 
 ## Cursor Sharing
 
@@ -185,30 +243,19 @@ name labels.
 
 ### Broadcasting Cursor Position
 
-Handle the `lf:viewport_change` event to broadcast cursor position. The cursor
-coordinates should be in flow-space (not screen-space):
+With `cursors: true`, the hook sends `lf:cursor_move` (throttled, in flow
+coordinates) while the pointer moves over the flow. Relay it:
 
 ```elixir
 @impl true
-def handle_event("lf:viewport_change", params, socket) do
-  flow = State.update_viewport(socket.assigns.flow, params)
-
-  # Optionally broadcast cursor if coordinates are included
-  socket =
-    case params do
-      %{"cursor_x" => x, "cursor_y" => y} ->
-        Collaboration.broadcast_cursor(socket, x, y)
-      _ ->
-        socket
-    end
-
-  {:noreply, assign(socket, flow: flow)}
+def handle_event("lf:cursor_move", %{"x" => x, "y" => y}, socket) do
+  {:noreply, Collaboration.broadcast_cursor(socket, x, y)}
 end
 ```
 
-Remote cursors are automatically rendered by the Flow component's JavaScript hook
-when `cursors: true` is set. Each cursor displays as an SVG arrow in the user's
-assigned color, with a label showing their name.
+Other users receive it through `Collaboration.handle_info/2`, which pushes
+`lf:remote_cursor` to their browser. Each cursor displays as an SVG arrow in the
+user's color, with their name, and disappears when the user leaves (with Presence).
 
 ## User Identity
 
@@ -282,7 +329,8 @@ This unsubscribes from PubSub topics and untracks Presence.
 defmodule MyAppWeb.CollabFlowLive do
   use MyAppWeb, :live_view
 
-  alias LiveFlow.{State, Node, Edge, Handle}
+  alias LiveFlow.State
+  alias LiveFlow.Changes.NodeChange
   alias LiveFlow.Collaboration
   alias LiveFlow.Collaboration.User
 
@@ -327,9 +375,25 @@ defmodule MyAppWeb.CollabFlowLive do
 
   @impl true
   def handle_event("lf:node_change", %{"changes" => changes}, socket) do
-    flow = Enum.reduce(changes, socket.assigns.flow, &apply_node_change(&2, &1))
-    socket = Collaboration.broadcast_change(socket, {:node_changes, changes})
+    flow = NodeChange.apply_changes(socket.assigns.flow, changes)
+    shared = Enum.filter(changes, &(&1["type"] in ~w(position resize remove)))
+
+    socket =
+      if shared == [],
+        do: socket,
+        else: Collaboration.broadcast_change(socket, {:node_changes, shared})
+
     {:noreply, assign(socket, flow: flow)}
+  end
+
+  @impl true
+  def handle_event("lf:drag_move", %{"changes" => changes}, socket) do
+    {:noreply, Collaboration.broadcast_drag_move(socket, changes)}
+  end
+
+  @impl true
+  def handle_event("lf:cursor_move", %{"x" => x, "y" => y}, socket) do
+    {:noreply, Collaboration.broadcast_cursor(socket, x, y)}
   end
 
   @impl true
@@ -362,11 +426,13 @@ defmodule MyAppWeb.CollabFlowLive do
   end
 
   @impl true
-  def handle_event("lf:selection_change", %{"nodes" => n, "edges" => e}, socket) do
-    flow = %{socket.assigns.flow |
-      selected_nodes: MapSet.new(n),
-      selected_edges: MapSet.new(e)
-    }
+  def handle_event("lf:selection_change", %{"nodes" => nodes, "edges" => edges}, socket) do
+    flow =
+      socket.assigns.flow
+      |> State.clear_selection()
+      |> State.select_nodes(nodes)
+
+    flow = Enum.reduce(edges, flow, &State.select_edge(&2, &1, multi: true))
     {:noreply, assign(socket, flow: flow)}
   end
 
@@ -387,16 +453,17 @@ defmodule MyAppWeb.CollabFlowLive do
     :ok
   end
 
-  # ... apply_node_change/2, get_or_create_flow/1 ...
+  # get_or_create_flow/1 reads the shared state (see "Shared State")
 end
 ```
 
 ## Architecture Notes
 
 - Collaboration is PubSub-based with no central server process. Each LiveView
-  process subscribes to shared topics and broadcasts changes directly.
+  process subscribes to shared topics and broadcasts changes directly (keep the
+  shared state for late joiners yourself, see "Shared State").
 - Changes from the current user are applied locally first, then broadcast.
   `handle_info/2` skips messages from the current user to avoid double-applying.
 - Undo/redo history is local only and not broadcast to other users.
-- Cursor positions are broadcast on a separate PubSub topic (`topic:cursors`)
+- Cursor positions are broadcast on a separate PubSub topic (`"#{topic}:cursors"`)
   to allow independent throttling.

@@ -8,8 +8,8 @@ defmodule LiveFlow.Components.Edge do
 
   use Phoenix.Component
 
-  alias LiveFlow.{Edge, Node, Handle}
-  alias LiveFlow.Paths.Path
+  alias LiveFlow.{Edge, Node}
+  alias LiveFlow.Paths.{Geometry, Path}
 
   @doc """
   Renders an edge between two nodes.
@@ -28,6 +28,9 @@ defmodule LiveFlow.Components.Edge do
   attr :edge, Edge, required: true
   attr :source_node, Node, required: true
   attr :target_node, Node, required: true
+  attr :edge_types, :map, default: %{}
+  attr :edge_label_renderer, :any, default: nil
+  attr :edge_toolbar, :any, default: nil
   attr :class, :string, default: nil
 
   def edge(assigns) do
@@ -35,35 +38,68 @@ defmodule LiveFlow.Components.Edge do
     source_node = assigns.source_node
     target_node = assigns.target_node
 
-    # Calculate handle positions
-    {source_pos, source_handle_position} =
-      get_handle_position(source_node, edge.source_handle, :source)
+    geometry = Geometry.edge_path(edge, source_node, target_node)
 
-    {target_pos, target_handle_position} =
-      get_handle_position(target_node, edge.target_handle, :target)
+    {path_result, source_pos, target_pos, path_type} =
+      case geometry do
+        nil ->
+          {%{path: "", label_x: 0, label_y: 0}, nil, nil, Geometry.base_path_type(edge.type)}
 
-    # Calculate path
-    path_module = Path.module_for_type(edge.type)
-
-    path_result =
-      if source_pos && target_pos do
-        Path.calculate(
-          path_module,
-          %{x: source_pos.x, y: source_pos.y, position: source_handle_position},
-          %{x: target_pos.x, y: target_pos.y, position: target_handle_position},
-          Map.to_list(edge.path_options)
-        )
-      else
-        %{path: "", label_x: 0, label_y: 0}
+        g ->
+          {g, Map.take(g.source, [:x, :y]), Map.take(g.target, [:x, :y]), g.path_type}
       end
+
+    # Check for custom edge renderer
+    custom_renderer = Map.get(assigns.edge_types, edge.type)
 
     assigns =
       assigns
       |> assign(:path, path_result.path)
       |> assign(:label_x, path_result.label_x)
       |> assign(:label_y, path_result.label_y)
+      |> assign(:source_pos, source_pos)
+      |> assign(:target_pos, target_pos)
       |> assign(:marker_start_id, marker_id(edge.marker_start))
       |> assign(:marker_end_id, marker_id(edge.marker_end))
+      |> assign(:custom_renderer, custom_renderer)
+      |> assign(:path_type, path_type)
+      |> assign(:source_position, geometry && geometry.source.position)
+      |> assign(:target_position, geometry && geometry.target.position)
+      |> assign(:path_options_json, path_options_json(edge.path_options))
+
+    if custom_renderer && is_function(custom_renderer, 1) do
+      render_custom_edge(custom_renderer, assigns)
+    else
+      render_default_edge(assigns)
+    end
+  end
+
+  defp render_custom_edge(renderer, assigns) do
+    # `__changed__: nil` disables change tracking: custom edges always diff
+    # (their paths are server-computed and change when nodes move)
+    renderer.(%{
+      edge: assigns.edge,
+      path: assigns.path,
+      label_x: assigns.label_x,
+      label_y: assigns.label_y,
+      source_pos: assigns.source_pos,
+      target_pos: assigns.target_pos,
+      source_position: assigns.source_position,
+      target_position: assigns.target_position,
+      path_type: assigns.path_type,
+      path_options_json: assigns.path_options_json,
+      marker_start_id: assigns.marker_start_id,
+      marker_end_id: assigns.marker_end_id,
+      __changed__: nil
+    })
+  end
+
+  defp render_default_edge(assigns) do
+    # Determine label renderer: per-edge data override > global edge_label_renderer > default
+    label_renderer =
+      Map.get(assigns.edge.data || %{}, :label_renderer) || assigns.edge_label_renderer
+
+    assigns = assign(assigns, :label_renderer, label_renderer)
 
     ~H"""
     <g
@@ -73,6 +109,10 @@ defmodule LiveFlow.Components.Edge do
       data-target={@edge.target}
       data-source-handle={@edge.source_handle}
       data-target-handle={@edge.target_handle}
+      data-source-floating={Map.get(@edge, :source_floating, false) && "true"}
+      data-target-floating={Map.get(@edge, :target_floating, false) && "true"}
+      data-path-type={@path_type}
+      data-path-options={@path_options_json}
     >
       <%!-- Invisible wider path for easier selection --%>
       <path
@@ -85,25 +125,37 @@ defmodule LiveFlow.Components.Edge do
         class="lf-edge"
         d={@path}
         data-edge-id={@edge.id}
-        data-selected={@edge.selected}
-        data-animated={@edge.animated}
+        data-selected={to_string(@edge.selected)}
+        data-animated={to_string(@edge.animated)}
         marker-start={@marker_start_id}
         marker-end={@marker_end_id}
         style={edge_style(@edge)}
       />
       <%!-- Edge label --%>
-      <foreignObject
-        :if={@edge.label}
-        x={@label_x - 50}
-        y={@label_y - 10}
-        width="100"
-        height="20"
-        class="lf-edge-label-wrapper"
-      >
-        <div class="lf-edge-label" style={label_style(@edge)}>
-          {@edge.label}
-        </div>
-      </foreignObject>
+      <%= if @edge.label && @label_renderer && is_function(@label_renderer, 1) do %>
+        <foreignObject
+          x={@label_x - 75}
+          y={@label_y - 20}
+          width="150"
+          height="40"
+          class="lf-edge-label-wrapper lf-edge-label-custom"
+        >
+          {render_label(@label_renderer, @edge, @label_x, @label_y)}
+        </foreignObject>
+      <% else %>
+        <foreignObject
+          :if={@edge.label}
+          x={@label_x - 50}
+          y={@label_y - 10}
+          width="100"
+          height="20"
+          class="lf-edge-label-wrapper"
+        >
+          <div class="lf-edge-label" style={label_style(@edge)}>
+            {@edge.label}
+          </div>
+        </foreignObject>
+      <% end %>
       <%!-- Insert "+" button on edge midpoint (only when edge.data[:insertable] is true) --%>
       <foreignObject
         :if={Map.get(@edge.data || %{}, :insertable, false) and not @edge.selected}
@@ -130,32 +182,63 @@ defmodule LiveFlow.Components.Edge do
           </svg>
         </div>
       </foreignObject>
-      <%!-- Delete button when selected --%>
-      <foreignObject
-        :if={@edge.selected and @edge.deletable}
-        x={@label_x - 12}
-        y={@label_y - 12}
-        width="24"
-        height="24"
-        class="lf-edge-delete-wrapper"
-      >
-        <div class="lf-edge-delete-btn" data-edge-id={@edge.id}>
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            stroke-linecap="round"
-            stroke-linejoin="round"
-          >
-            <polyline points="3 6 5 6 21 6" />
-            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-          </svg>
-        </div>
-      </foreignObject>
+      <%!-- Edge toolbar or delete button when selected --%>
+      <%= if @edge.selected && @edge_toolbar && is_function(@edge_toolbar, 1) do %>
+        <foreignObject
+          x={@label_x - 60}
+          y={@label_y - 18}
+          width="120"
+          height="36"
+          class="lf-edge-toolbar-wrapper"
+        >
+          {render_toolbar(@edge_toolbar, @edge, @label_x, @label_y)}
+        </foreignObject>
+      <% else %>
+        <foreignObject
+          :if={@edge.selected and @edge.deletable}
+          x={@label_x - 12}
+          y={@label_y - 12}
+          width="24"
+          height="24"
+          class="lf-edge-delete-wrapper"
+        >
+          <div class="lf-edge-delete-btn" data-edge-id={@edge.id}>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <polyline points="3 6 5 6 21 6" />
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+            </svg>
+          </div>
+        </foreignObject>
+      <% end %>
+      <%!-- Reconnect handles at the endpoints of reconnectable edges (visible on hover/selection) --%>
+      <circle
+        :if={Map.get(@edge, :reconnectable, false) and @source_pos}
+        cx={@source_pos.x}
+        cy={@source_pos.y}
+        r="6"
+        class="lf-edge-reconnect-handle"
+        data-edge-id={@edge.id}
+        data-reconnect-end="source"
+      />
+      <circle
+        :if={Map.get(@edge, :reconnectable, false) and @target_pos}
+        cx={@target_pos.x}
+        cy={@target_pos.y}
+        r="6"
+        class="lf-edge-reconnect-handle"
+        data-edge-id={@edge.id}
+        data-reconnect-end="target"
+      />
     </g>
     """
   end
@@ -190,82 +273,22 @@ defmodule LiveFlow.Components.Edge do
     """
   end
 
-  # Get the position of a handle on a node
-  defp get_handle_position(%Node{} = node, handle_id, type) do
-    # Find the handle
-    handle = find_handle(node.handles, handle_id, type)
-    handle_position = if handle, do: handle.position, else: default_handle_position(type)
-
-    # Calculate position based on node bounds and handle position,
-    # then offset the endpoint along the edge the handle sits on if
-    # the handle's inline style carries a left/top percentage (used
-    # when multiple handles share a side and are visually spread).
-    pos =
-      node
-      |> calculate_handle_coords(handle_position)
-      |> apply_handle_style_offset(handle, node, handle_position)
-
-    {pos, handle_position}
+  # `__changed__: nil` re-renders custom labels/toolbars whenever the edge
+  # changes (an empty map marked every assign as unchanged)
+  defp render_label(renderer, edge, label_x, label_y) do
+    renderer.(%{edge: edge, x: label_x, y: label_y, __changed__: nil})
   end
 
-  defp find_handle(handles, nil, type) do
-    # No specific handle, find first of matching type
-    Enum.find(handles, fn h -> h.type == type end)
+  defp render_toolbar(renderer, edge, label_x, label_y) do
+    renderer.(%{edge: edge, x: label_x, y: label_y, __changed__: nil})
   end
 
-  defp find_handle(handles, handle_id, _type) do
-    Enum.find(handles, fn h -> Handle.effective_id(h) == handle_id end)
+  # Path options are mirrored to the client so it can redraw the edge with the
+  # same algorithm while nodes move (see assets/js/live_flow/utils/edge_updater.js)
+  defp path_options_json(options) do
+    options = Map.delete(options, :base_type)
+    if map_size(options) == 0, do: nil, else: Jason.encode!(options)
   end
-
-  defp default_handle_position(:source), do: :right
-  defp default_handle_position(:target), do: :left
-
-  defp calculate_handle_coords(%Node{position: pos, width: w, height: h}, handle_position) do
-    w = w || 100
-    h = h || 40
-
-    case handle_position do
-      :top -> %{x: pos.x + w / 2, y: pos.y}
-      :bottom -> %{x: pos.x + w / 2, y: pos.y + h}
-      :left -> %{x: pos.x, y: pos.y + h / 2}
-      :right -> %{x: pos.x + w, y: pos.y + h / 2}
-    end
-  end
-
-  # For handles on top/bottom: read `style.left` percentage and shift x.
-  # For handles on left/right: read `style.top` percentage and shift y.
-  # Percentages are relative to the node's width / height respectively,
-  # matching how the browser positions the handle element itself.
-  defp apply_handle_style_offset(pos, nil, _node, _handle_position), do: pos
-
-  defp apply_handle_style_offset(pos, %Handle{style: style}, %Node{} = node, handle_position)
-       when handle_position in [:top, :bottom] do
-    case parse_percentage(Map.get(style, "left") || Map.get(style, :left)) do
-      nil -> pos
-      pct -> %{pos | x: node.position.x + (node.width || 100) * pct}
-    end
-  end
-
-  defp apply_handle_style_offset(pos, %Handle{style: style}, %Node{} = node, handle_position)
-       when handle_position in [:left, :right] do
-    case parse_percentage(Map.get(style, "top") || Map.get(style, :top)) do
-      nil -> pos
-      pct -> %{pos | y: node.position.y + (node.height || 40) * pct}
-    end
-  end
-
-  defp apply_handle_style_offset(pos, _handle, _node, _handle_position), do: pos
-
-  defp parse_percentage(nil), do: nil
-
-  defp parse_percentage(value) when is_binary(value) do
-    case Float.parse(String.trim_trailing(value, "%")) do
-      {pct, _} -> pct / 100
-      :error -> nil
-    end
-  end
-
-  defp parse_percentage(_), do: nil
 
   defp opposite_position(:left), do: :right
   defp opposite_position(:right), do: :left

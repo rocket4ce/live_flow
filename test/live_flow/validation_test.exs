@@ -120,7 +120,9 @@ defmodule LiveFlow.ValidationTest do
     test "allows same nodes with different handles" do
       flow =
         base_flow()
-        |> State.add_edge(make_edge("e1", "n1", "n2", source_handle: "out-1", target_handle: "in-1"))
+        |> State.add_edge(
+          make_edge("e1", "n1", "n2", source_handle: "out-1", target_handle: "in-1")
+        )
 
       params = conn_params("n1", "n2", "out-2", "in-2")
 

@@ -69,6 +69,75 @@ defmodule LiveFlow do
   defdelegate new_handle(type, position, opts \\ []), to: LiveFlow.Handle, as: :new
 
   @doc """
+  Animates nodes of the flow rendered with `id` to new positions.
+
+  Instead of updating the state right away, the client animates the nodes
+  (and their edges) and pushes the final positions back as an
+  `lf:node_change` event, which the usual node change handling applies.
+
+  `positions` is a map (or list of `{id, position}`) of node IDs to
+  `%{x: x, y: y}`. For child nodes the position is relative to the parent,
+  like `LiveFlow.Node.position`.
+
+  ## Options
+
+    * `:duration` - Animation duration in milliseconds (default: `300`)
+    * `:fit_view` - Also fit the view to the final positions, `true` or
+      `%{padding: 0.1}` (default: `false`)
+
+  ## Examples
+
+      positions = LiveFlow.Layout.tree(flow, direction: :lr)
+      {:noreply, LiveFlow.animate_positions(socket, "my-flow", flow, positions)}
+  """
+  @spec animate_positions(
+          Phoenix.LiveView.Socket.t(),
+          String.t(),
+          LiveFlow.State.t(),
+          map() | list(),
+          keyword()
+        ) ::
+          Phoenix.LiveView.Socket.t()
+  def animate_positions(socket, flow_id, %LiveFlow.State{} = flow, positions, opts \\ []) do
+    target = LiveFlow.Layout.apply_positions(flow, positions)
+
+    payload =
+      Enum.flat_map(positions, fn {id, pos} ->
+        case LiveFlow.State.absolute_position(target, id) do
+          nil -> []
+          abs -> [%{id: id, x: pos.x, y: pos.y, ax: abs.x, ay: abs.y}]
+        end
+      end)
+
+    duration = Keyword.get(opts, :duration, 300)
+
+    socket =
+      Phoenix.LiveView.push_event(socket, "lf:animate_positions", %{
+        flow_id: flow_id,
+        positions: payload,
+        duration: duration
+      })
+
+    case {Keyword.get(opts, :fit_view, false), LiveFlow.State.bounds(target)} do
+      {false, _} ->
+        socket
+
+      {_, nil} ->
+        socket
+
+      {fit, bounds} ->
+        padding = if is_map(fit), do: Map.get(fit, :padding, 0.1), else: 0.1
+
+        Phoenix.LiveView.push_event(socket, "lf:fit_view", %{
+          flow_id: flow_id,
+          bounds: bounds,
+          padding: padding,
+          duration: duration
+        })
+    end
+  end
+
+  @doc """
   Creates a new flow state with the given nodes and edges.
 
   ## Examples

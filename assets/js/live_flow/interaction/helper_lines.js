@@ -63,10 +63,11 @@ export class HelperLinesManager {
     let dragLeft = Infinity, dragRight = -Infinity;
 
     draggingNodes.forEach((drag) => {
-      const x = parseFloat(drag.element.style.left) || 0;
-      const y = parseFloat(drag.element.style.top) || 0;
-      const w = drag.element.offsetWidth;
-      const h = drag.element.offsetHeight;
+      // Raw (unsnapped) positions and cached sizes from the drag manager
+      const x = drag._rawX ?? (parseFloat(drag.element.style.left) || 0);
+      const y = drag._rawY ?? (parseFloat(drag.element.style.top) || 0);
+      const w = drag.width ?? drag.element.offsetWidth;
+      const h = drag.height ?? drag.element.offsetHeight;
 
       dragTop = Math.min(dragTop, y);
       dragBottom = Math.max(dragBottom, y + h);

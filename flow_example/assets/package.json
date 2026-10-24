@@ -1,0 +1,5 @@
+{
+  "name": "flow_example_assets",
+  "private": true,
+  "description": "Assets for the LiveFlow showcase app. This file stops esbuild from inheriting the library's root package.json (\"type\": \"module\"), which would turn vendor CommonJS files like topbar.js into ES modules."
+}

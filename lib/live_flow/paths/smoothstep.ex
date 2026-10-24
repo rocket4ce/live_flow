@@ -2,37 +2,48 @@ defmodule LiveFlow.Paths.Smoothstep do
   @moduledoc """
   Smoothstep path calculation for edges.
 
-  Creates orthogonal paths with rounded corners, similar to step paths
-  but with smooth curved transitions at corners.
+  Creates orthogonal paths with rounded corners. This is a port of
+  `getSmoothStepPath` from xyflow, including the `step_position` option
+  and the collinear-point cleanup that keeps every bend rounded.
+
+  The JavaScript client mirrors this algorithm in `assets/js/live_flow/utils/paths.js`
+  so edges keep their shape while nodes are dragged or resized.
+
+  ## Options
+
+    * `:border_radius` - Corner radius (default: `5`)
+    * `:offset` - Distance the path travels out of a handle before turning (default: `20`)
+    * `:step_position` - Where the bend happens between source (`0.0`) and
+      target (`1.0`) (default: `0.5`)
+    * `:center_x` / `:center_y` - Force the bend through a specific coordinate
   """
 
   @behaviour LiveFlow.Paths.Path
 
   @default_offset 20
   @default_border_radius 5
+  @default_step_position 0.5
 
   @impl true
   def calculate(source, target, opts \\ []) do
     offset = Keyword.get(opts, :offset, @default_offset)
     border_radius = Keyword.get(opts, :border_radius, @default_border_radius)
+    step_position = Keyword.get(opts, :step_position, @default_step_position)
+    center = {Keyword.get(opts, :center_x), Keyword.get(opts, :center_y)}
 
-    sx = source.x
-    sy = source.y
-    tx = target.x
-    ty = target.y
-    source_pos = source.position
-    target_pos = target.position
-
-    points = calculate_points(sx, sy, tx, ty, source_pos, target_pos, offset)
-
-    path = build_smooth_path(points, border_radius)
-
-    # Label at middle segment
-    mid_idx = div(length(points), 2)
-    {label_x, label_y} = Enum.at(points, mid_idx)
+    {points, label_x, label_y} =
+      points(
+        {source.x, source.y},
+        source.position || :bottom,
+        {target.x, target.y},
+        target.position || :top,
+        center,
+        offset,
+        step_position
+      )
 
     %{
-      path: path,
+      path: build_path(points, border_radius),
       label_x: label_x,
       label_y: label_y
     }
@@ -50,182 +61,233 @@ defmodule LiveFlow.Paths.Smoothstep do
     )
   end
 
-  # Same point calculation as Step
-  defp calculate_points(sx, sy, tx, ty, source_pos, target_pos, offset) do
-    case {source_pos, target_pos} do
-      {:right, :left} when tx > sx + offset * 2 ->
-        mid_x = (sx + tx) / 2
-        [{sx, sy}, {mid_x, sy}, {mid_x, ty}, {tx, ty}]
+  @doc false
+  # Returns `{path_points, label_x, label_y}`. Shared with `LiveFlow.Paths.Step`.
+  def points(source, source_pos, target, target_pos, {center_x, center_y}, offset, step_position) do
+    source_dir = direction(source_pos)
+    target_dir = direction(target_pos)
+    source_gapped = add(source, scale(source_dir, offset))
+    target_gapped = add(target, scale(target_dir, offset))
 
-      {:right, :left} ->
-        mid_y = (sy + ty) / 2
+    dir = main_direction(source_gapped, source_pos, target_gapped)
+    axis = if elem(dir, 0) != 0, do: 0, else: 1
+    curr_dir = elem(dir, axis)
 
-        [
-          {sx, sy},
-          {sx + offset, sy},
-          {sx + offset, mid_y},
-          {tx - offset, mid_y},
-          {tx - offset, ty},
-          {tx, ty}
-        ]
+    {mid_points, label_x, label_y, source_gap_offset, target_gap_offset} =
+      if elem(source_dir, axis) * elem(target_dir, axis) == -1 do
+        # Opposite handle positions (default case)
+        {sgx, sgy} = source_gapped
+        {tgx, tgy} = target_gapped
 
-      {:left, :right} when sx > tx + offset * 2 ->
-        mid_x = (sx + tx) / 2
-        [{sx, sy}, {mid_x, sy}, {mid_x, ty}, {tx, ty}]
+        {cx, cy} =
+          if axis == 0 do
+            {center_x || sgx + (tgx - sgx) * step_position, center_y || (sgy + tgy) / 2}
+          else
+            {center_x || (sgx + tgx) / 2, center_y || sgy + (tgy - sgy) * step_position}
+          end
 
-      {:left, :right} ->
-        mid_y = (sy + ty) / 2
+        vertical_split = [{cx, sgy}, {cx, tgy}]
+        horizontal_split = [{sgx, cy}, {tgx, cy}]
 
-        [
-          {sx, sy},
-          {sx - offset, sy},
-          {sx - offset, mid_y},
-          {tx + offset, mid_y},
-          {tx + offset, ty},
-          {tx, ty}
-        ]
+        mid =
+          case {elem(source_dir, axis) == curr_dir, axis} do
+            {true, 0} -> vertical_split
+            {true, 1} -> horizontal_split
+            {false, 0} -> horizontal_split
+            {false, 1} -> vertical_split
+          end
 
-      {:bottom, :top} when ty > sy + offset * 2 ->
-        mid_y = (sy + ty) / 2
-        [{sx, sy}, {sx, mid_y}, {tx, mid_y}, {tx, ty}]
+        {mid, cx, cy, {0, 0}, {0, 0}}
+      else
+        same_or_mixed_points(
+          source,
+          source_pos,
+          source_dir,
+          source_gapped,
+          target,
+          target_pos,
+          target_dir,
+          target_gapped,
+          axis,
+          curr_dir,
+          offset
+        )
+      end
 
-      {:bottom, :top} ->
-        mid_x = (sx + tx) / 2
+    gapped_source = add(source_gapped, source_gap_offset)
+    gapped_target = add(target_gapped, target_gap_offset)
 
-        [
-          {sx, sy},
-          {sx, sy + offset},
-          {mid_x, sy + offset},
-          {mid_x, ty - offset},
-          {tx, ty - offset},
-          {tx, ty}
-        ]
+    path_points =
+      ([source, gapped_source] ++ mid_points ++ [gapped_target, target])
+      |> Enum.reduce([], fn
+        point, [b, a | rest] = acc ->
+          # Drop b if the path runs straight through it, otherwise it would
+          # shrink the bend of the next corner
+          if between?(a, b, point), do: [point, a | rest], else: [point | acc]
 
-      {:top, :bottom} when sy > ty + offset * 2 ->
-        mid_y = (sy + ty) / 2
-        [{sx, sy}, {sx, mid_y}, {tx, mid_y}, {tx, ty}]
-
-      {:top, :bottom} ->
-        mid_x = (sx + tx) / 2
-
-        [
-          {sx, sy},
-          {sx, sy - offset},
-          {mid_x, sy - offset},
-          {mid_x, ty + offset},
-          {tx, ty + offset},
-          {tx, ty}
-        ]
-
-      {:right, :right} ->
-        max_x = max(sx, tx) + offset
-        [{sx, sy}, {max_x, sy}, {max_x, ty}, {tx, ty}]
-
-      {:left, :left} ->
-        min_x = min(sx, tx) - offset
-        [{sx, sy}, {min_x, sy}, {min_x, ty}, {tx, ty}]
-
-      {:top, :top} ->
-        min_y = min(sy, ty) - offset
-        [{sx, sy}, {sx, min_y}, {tx, min_y}, {tx, ty}]
-
-      {:bottom, :bottom} ->
-        max_y = max(sy, ty) + offset
-        [{sx, sy}, {sx, max_y}, {tx, max_y}, {tx, ty}]
-
-      {:right, :top} ->
-        [{sx, sy}, {tx, sy}, {tx, ty}]
-
-      {:right, :bottom} ->
-        [{sx, sy}, {tx, sy}, {tx, ty}]
-
-      {:left, :top} ->
-        [{sx, sy}, {tx, sy}, {tx, ty}]
-
-      {:left, :bottom} ->
-        [{sx, sy}, {tx, sy}, {tx, ty}]
-
-      {:top, :right} ->
-        [{sx, sy}, {sx, ty}, {tx, ty}]
-
-      {:top, :left} ->
-        [{sx, sy}, {sx, ty}, {tx, ty}]
-
-      {:bottom, :right} ->
-        [{sx, sy}, {sx, ty}, {tx, ty}]
-
-      {:bottom, :left} ->
-        [{sx, sy}, {sx, ty}, {tx, ty}]
-
-      _ ->
-        [{sx, sy}, {tx, ty}]
-    end
-  end
-
-  defp build_smooth_path(points, _radius) when length(points) < 3 do
-    [{x1, y1}, {x2, y2}] = points
-    "M #{format(x1)},#{format(y1)} L #{format(x2)},#{format(y2)}"
-  end
-
-  defp build_smooth_path(points, radius) do
-    [{x0, y0} | rest] = points
-
-    initial_path = "M #{format(x0)},#{format(y0)}"
-
-    # Track both path segments and the last coordinate we processed
-    {path_segments, _last_point} =
-      rest
-      |> Enum.chunk_every(2, 1, :discard)
-      |> Enum.reduce({[initial_path], {x0, y0}}, fn [{cx, cy}, {nx, ny}], {segments, {px, py}} ->
-        {corner_path, endpoint} = rounded_corner_with_endpoint(px, py, cx, cy, nx, ny, radius)
-        {segments ++ [corner_path], endpoint}
+        point, acc ->
+          [point | acc]
       end)
+      |> Enum.reverse()
 
-    # Add final line to last point
-    {lx, ly} = List.last(rest)
-    path_segments = path_segments ++ ["L #{format(lx)},#{format(ly)}"]
-
-    Enum.join(path_segments, " ")
+    {path_points, label_x, label_y}
   end
 
-  defp rounded_corner_with_endpoint(px, py, cx, cy, nx, ny, radius) do
-    # Vector from corner to previous point
-    v1x = px - cx
-    v1y = py - cy
-    len1 = :math.sqrt(v1x * v1x + v1y * v1y)
+  defp same_or_mixed_points(
+         source,
+         source_pos,
+         source_dir,
+         source_gapped,
+         target,
+         target_pos,
+         target_dir,
+         target_gapped,
+         axis,
+         curr_dir,
+         offset
+       ) do
+    {sgx, sgy} = source_gapped
+    {tgx, tgy} = target_gapped
 
-    # Vector from corner to next point
-    v2x = nx - cx
-    v2y = ny - cy
-    len2 = :math.sqrt(v2x * v2x + v2y * v2y)
+    # source_target takes x from source and y from target, target_source the opposite
+    source_target = [{sgx, tgy}]
+    target_source = [{tgx, sgy}]
 
-    # Limit radius by available length
-    actual_radius = min(radius, min(len1, len2) / 2)
+    points =
+      if axis == 0 do
+        if elem(source_dir, 0) == curr_dir, do: target_source, else: source_target
+      else
+        if elem(source_dir, 1) == curr_dir, do: source_target, else: target_source
+      end
 
-    if actual_radius < 1 do
-      # Too small for curve, just line to corner
-      {"L #{format(cx)},#{format(cy)}", {cx, cy}}
-    else
-      # Normalize vectors
-      n1x = v1x / len1
-      n1y = v1y / len1
-      n2x = v2x / len2
-      n2y = v2y / len2
+    # Same handle positions (e.g. right -> right) closer than the offset would
+    # overlap the gapped points, so push one of them back
+    {source_gap_offset, target_gap_offset} =
+      if source_pos == target_pos do
+        diff = abs(elem(source, axis) - elem(target, axis))
 
-      # Start and end points of the curve
-      start_x = cx + n1x * actual_radius
-      start_y = cy + n1y * actual_radius
-      end_x = cx + n2x * actual_radius
-      end_y = cy + n2y * actual_radius
+        if diff <= offset do
+          gap_offset = min(offset - 1, offset - diff)
 
-      # Use quadratic bezier for smooth corner
-      path =
-        "L #{format(start_x)},#{format(start_y)} Q #{format(cx)},#{format(cy)} #{format(end_x)},#{format(end_y)}"
+          if elem(source_dir, axis) == curr_dir do
+            sign = if elem(source_gapped, axis) > elem(source, axis), do: -1, else: 1
+            {put_elem({0, 0}, axis, sign * gap_offset), {0, 0}}
+          else
+            sign = if elem(target_gapped, axis) > elem(target, axis), do: -1, else: 1
+            {{0, 0}, put_elem({0, 0}, axis, sign * gap_offset)}
+          end
+        else
+          {{0, 0}, {0, 0}}
+        end
+      else
+        {{0, 0}, {0, 0}}
+      end
 
-      {path, {end_x, end_y}}
+    # Mixed handle positions like right -> bottom
+    points =
+      if source_pos != target_pos do
+        opp = 1 - axis
+        same_dir? = elem(source_dir, axis) == elem(target_dir, opp)
+        source_gt? = elem(source_gapped, opp) > elem(target_gapped, opp)
+        source_lt? = elem(source_gapped, opp) < elem(target_gapped, opp)
+
+        flip? =
+          (elem(source_dir, axis) == 1 and
+             ((not same_dir? and source_gt?) or (same_dir? and source_lt?))) or
+            (elem(source_dir, axis) != 1 and
+               ((not same_dir? and source_lt?) or (same_dir? and source_gt?)))
+
+        if flip?, do: if(axis == 0, do: source_target, else: target_source), else: points
+      else
+        points
+      end
+
+    {sgpx, sgpy} = add(source_gapped, source_gap_offset)
+    {tgpx, tgpy} = add(target_gapped, target_gap_offset)
+    [{p0x, p0y}] = points
+    max_x_distance = max(abs(sgpx - p0x), abs(tgpx - p0x))
+    max_y_distance = max(abs(sgpy - p0y), abs(tgpy - p0y))
+
+    # Place the label on the longest segment of the edge
+    {label_x, label_y} =
+      if max_x_distance >= max_y_distance do
+        {(sgpx + tgpx) / 2, p0y}
+      else
+        {p0x, (sgpy + tgpy) / 2}
+      end
+
+    {points, label_x, label_y, source_gap_offset, target_gap_offset}
+  end
+
+  @doc false
+  def build_path(points, border_radius) do
+    [{x0, y0} | _] = points
+    {lx, ly} = List.last(points)
+
+    bends =
+      points
+      |> Enum.chunk_every(3, 1, :discard)
+      |> Enum.map(fn [a, b, c] -> bend(a, b, c, border_radius) end)
+
+    IO.iodata_to_binary(["M#{format(x0)} #{format(y0)}", bends, "L#{format(lx)} #{format(ly)}"])
+  end
+
+  defp bend({ax, ay} = a, {x, y} = b, {cx, cy} = c, size) do
+    bend_size = min(min(distance(a, b) / 2, distance(b, c) / 2), size)
+
+    cond do
+      bend_size <= 0 or (ax == x and x == cx) or (ay == y and y == cy) ->
+        "L#{format(x)} #{format(y)}"
+
+      # First segment is horizontal
+      ay == y ->
+        x_dir = if ax < cx, do: -1, else: 1
+        y_dir = if ay < cy, do: 1, else: -1
+
+        "L #{format(x + bend_size * x_dir)},#{format(y)}Q #{format(x)},#{format(y)} #{format(x)},#{format(y + bend_size * y_dir)}"
+
+      true ->
+        x_dir = if ax < cx, do: 1, else: -1
+        y_dir = if ay < cy, do: -1, else: 1
+
+        "L #{format(x)},#{format(y + bend_size * y_dir)}Q #{format(x)},#{format(y)} #{format(x + bend_size * x_dir)},#{format(y)}"
     end
   end
 
-  defp format(num) when is_float(num), do: :erlang.float_to_binary(num, decimals: 2)
+  # Checks if b lies on the straight segment from a to c, including b == c
+  defp between?({ax, ay}, {bx, by}, {cx, cy}) do
+    (ax == bx and bx == cx and (by - ay) * (cy - by) >= 0) or
+      (ay == by and by == cy and (bx - ax) * (cx - bx) >= 0)
+  end
+
+  defp main_direction({sx, _sy}, source_pos, {tx, _ty}) when source_pos in [:left, :right] do
+    if sx < tx, do: {1, 0}, else: {-1, 0}
+  end
+
+  defp main_direction({_sx, sy}, _source_pos, {_tx, ty}) do
+    if sy < ty, do: {0, 1}, else: {0, -1}
+  end
+
+  defp direction(:left), do: {-1, 0}
+  defp direction(:right), do: {1, 0}
+  defp direction(:top), do: {0, -1}
+  defp direction(:bottom), do: {0, 1}
+
+  defp add({ax, ay}, {bx, by}), do: {ax + bx, ay + by}
+  defp scale({x, y}, factor), do: {x * factor, y * factor}
+
+  defp distance({ax, ay}, {bx, by}), do: :math.sqrt((bx - ax) ** 2 + (by - ay) ** 2)
+
+  defp format(num) when is_float(num) do
+    if num == Float.round(num), do: Integer.to_string(trunc(num)), else: float_to_string(num)
+  end
+
   defp format(num), do: to_string(num)
+
+  defp float_to_string(num) do
+    num
+    |> :erlang.float_to_binary(decimals: 2)
+    |> String.trim_trailing("0")
+    |> String.trim_trailing(".")
+  end
 end

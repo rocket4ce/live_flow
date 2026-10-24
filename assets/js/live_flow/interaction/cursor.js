@@ -27,7 +27,7 @@ export class CursorManager {
     this.lastCursorPush = now;
 
     const vp = this.hook.viewport;
-    const rect = this.hook.container.getBoundingClientRect();
+    const rect = this.hook.getContainerRect();
     const screenX = event.clientX - rect.left;
     const screenY = event.clientY - rect.top;
 

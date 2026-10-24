@@ -29,6 +29,7 @@ defmodule LiveFlow.Components.NodeWrapper do
       |> assign(assigns)
       |> assign_new(:node_types, fn -> %{} end)
       |> assign_new(:node_renderer, fn -> nil end)
+      |> assign_new(:z, fn -> nil end)
 
     {:ok, socket}
   end
@@ -53,7 +54,7 @@ defmodule LiveFlow.Components.NodeWrapper do
       |> assign(:renderer_type, renderer_type)
       |> assign(:type_renderer, type_renderer)
       |> assign(:fallback_renderer, fallback_renderer)
-      |> assign(:style, node_style(node))
+      |> assign(:style, node_style(node, assigns.z))
       |> assign(:node_changed, node_changed)
 
     ~H"""
@@ -66,11 +67,17 @@ defmodule LiveFlow.Components.NodeWrapper do
       ]}
       data-node-id={@node.id}
       data-node-type={@node.type}
-      data-selected={@node.selected}
-      data-draggable={@node.draggable}
-      data-connectable={@node.connectable}
-      data-selectable={@node.selectable}
-      data-dragging={@node.dragging}
+      data-selected={to_string(@node.selected)}
+      data-draggable={to_string(@node.draggable)}
+      data-connectable={to_string(@node.connectable)}
+      data-selectable={to_string(@node.selectable)}
+      data-deletable={to_string(@node.deletable)}
+      data-dragging={to_string(@node.dragging)}
+      data-resizable={to_string(@node.resizable)}
+      data-resizing={to_string(@node.resizing)}
+      data-drag-handle={@node.drag_handle}
+      data-parent-id={@node.parent_id}
+      data-extent={@node.parent_id && extent_attr(@node.extent)}
       style={@style}
       phx-click="lf:node_click"
       phx-value-node-id={@node.id}
@@ -172,18 +179,37 @@ defmodule LiveFlow.Components.NodeWrapper do
 
   defp node_changed(_assigns), do: nil
 
-  defp node_style(%Node{position: pos, z_index: z, style: custom_style, dragging: dragging}) do
+  # Extent relative to the parent, read by the hook while dragging
+  defp extent_attr(:parent), do: "parent"
+  defp extent_attr({{x1, y1}, {x2, y2}}), do: Jason.encode!([[x1, y1], [x2, y2]])
+  defp extent_attr(_), do: nil
+
+  # `z` is the node's place in the render order computed by the Flow
+  # component (z_index, selection elevation, sub-flow hierarchy), so the CSS
+  # stacking matches it
+  defp node_style(%Node{} = node, z) do
+    %{position: pos, style: custom_style, dragging: dragging} = node
+    z = z || node.z_index
+
     base_style = [
       "left: #{pos.x}px",
       "top: #{pos.y}px",
       "z-index: #{z + if(dragging, do: 1000, else: 0)}"
     ]
 
+    # Include explicit width/height for resizable nodes that have been measured
+    resize_style =
+      if Map.get(node, :resizable) && node.width && node.height do
+        ["width: #{node.width}px", "height: #{node.height}px"]
+      else
+        []
+      end
+
     custom =
       custom_style
       |> Enum.map(fn {k, v} -> "#{k}: #{v}" end)
 
-    (base_style ++ custom)
+    (base_style ++ resize_style ++ custom)
     |> Enum.join("; ")
   end
 end

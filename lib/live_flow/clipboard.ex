@@ -16,8 +16,8 @@ defmodule LiveFlow.Clipboard do
       # Cut (copy + delete)
       {clipboard, flow} = LiveFlow.Clipboard.cut(clipboard, flow)
 
-      # Paste
-      case LiveFlow.Clipboard.paste(clipboard, flow) do
+      # Paste (at the pointer, when lf:paste carries a position)
+      case LiveFlow.Clipboard.paste(clipboard, flow, position: params["position"]) do
         {:ok, flow, clipboard} -> ...
         :empty -> ...
       end
@@ -98,13 +98,21 @@ defmodule LiveFlow.Clipboard do
   Each successive paste increases the position offset by #{@paste_offset}px.
   Pasted nodes and edges are auto-selected.
   Returns `{:ok, updated_flow, updated_clipboard}` or `:empty`.
-  """
-  @spec paste(t(), State.t()) :: {:ok, State.t(), t()} | :empty
-  def paste(%__MODULE__{nodes: []}, _flow), do: :empty
 
-  def paste(%__MODULE__{} = clipboard, flow) do
+  ## Options
+
+    * `:position` - flow position (`%{x: x, y: y}` or string keys) for the
+      top-left corner of the pasted nodes, instead of the offset. The hook
+      sends the pointer position with `lf:paste` when the pointer is over
+      the flow: `paste(clipboard, flow, position: params["position"])`
+  """
+  @spec paste(t(), State.t(), keyword()) :: {:ok, State.t(), t()} | :empty
+  def paste(clipboard, flow, opts \\ [])
+  def paste(%__MODULE__{nodes: []}, _flow, _opts), do: :empty
+
+  def paste(%__MODULE__{} = clipboard, flow, opts) do
     paste_count = clipboard.paste_count + 1
-    offset = @paste_offset * paste_count
+    {offset_x, offset_y} = paste_offset(clipboard, paste_count, opts[:position])
 
     # Build old_id → new_id mapping for nodes
     id_map =
@@ -115,25 +123,27 @@ defmodule LiveFlow.Clipboard do
     # Clone nodes with new IDs and offset positions
     new_nodes =
       Enum.map(clipboard.nodes, fn node ->
-        %{node |
-          id: id_map[node.id],
-          position: %{x: node.position.x + offset, y: node.position.y + offset},
-          selected: false,
-          dragging: false,
-          measured: false,
-          width: nil,
-          height: nil
+        %{
+          node
+          | id: id_map[node.id],
+            position: %{x: node.position.x + offset_x, y: node.position.y + offset_y},
+            selected: false,
+            dragging: false,
+            measured: false,
+            width: nil,
+            height: nil
         }
       end)
 
     # Clone edges with remapped source/target IDs
     new_edges =
       Enum.map(clipboard.edges, fn edge ->
-        %{edge |
-          id: "#{edge.id}-copy-#{System.unique_integer([:positive])}",
-          source: id_map[edge.source],
-          target: id_map[edge.target],
-          selected: false
+        %{
+          edge
+          | id: "#{edge.id}-copy-#{System.unique_integer([:positive])}",
+            source: id_map[edge.source],
+            target: id_map[edge.target],
+            selected: false
         }
       end)
 
@@ -145,6 +155,24 @@ defmodule LiveFlow.Clipboard do
       |> select_items(new_nodes, new_edges)
 
     {:ok, flow, %{clipboard | paste_count: paste_count}}
+  end
+
+  # Moves the top-left corner of the copied nodes to `position`, or offsets
+  # them a bit more on every paste
+  defp paste_offset(clipboard, paste_count, position) do
+    case position do
+      %{"x" => x, "y" => y} when is_number(x) and is_number(y) ->
+        paste_offset(clipboard, paste_count, %{x: x, y: y})
+
+      %{x: x, y: y} when is_number(x) and is_number(y) ->
+        min_x = clipboard.nodes |> Enum.map(& &1.position.x) |> Enum.min()
+        min_y = clipboard.nodes |> Enum.map(& &1.position.y) |> Enum.min()
+        {x - min_x, y - min_y}
+
+      _none ->
+        offset = @paste_offset * paste_count
+        {offset, offset}
+    end
   end
 
   @doc "Returns true if the clipboard is empty."
@@ -171,11 +199,6 @@ defmodule LiveFlow.Clipboard do
         {id, %{edge | selected: MapSet.member?(edge_ids, id)}}
       end)
 
-    %{flow |
-      nodes: nodes,
-      edges: edges,
-      selected_nodes: node_ids,
-      selected_edges: edge_ids
-    }
+    %{flow | nodes: nodes, edges: edges, selected_nodes: node_ids, selected_edges: edge_ids}
   end
 end

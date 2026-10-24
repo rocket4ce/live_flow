@@ -21,6 +21,8 @@ defmodule LiveFlow.Node do
     * `:hidden` - Whether the node is visible
     * `:dragging` - Whether the node is currently being dragged
     * `:resizing` - Whether the node is currently being resized
+    * `:resizable` - Whether the node can be resized
+    * `:drag_handle` - CSS selector; when set the node can only be dragged from matching elements
     * `:parent_id` - ID of parent node for grouping
     * `:extent` - Movement constraint (`:parent` or bounds map)
     * `:style` - Custom inline styles map
@@ -55,6 +57,8 @@ defmodule LiveFlow.Node do
           hidden: boolean(),
           dragging: boolean(),
           resizing: boolean(),
+          resizable: boolean(),
+          drag_handle: String.t() | nil,
           parent_id: String.t() | nil,
           extent: :parent | map() | nil,
           style: map(),
@@ -68,6 +72,7 @@ defmodule LiveFlow.Node do
     :id,
     :width,
     :height,
+    :drag_handle,
     :parent_id,
     :class,
     type: :default,
@@ -81,6 +86,7 @@ defmodule LiveFlow.Node do
     hidden: false,
     dragging: false,
     resizing: false,
+    resizable: false,
     extent: nil,
     style: %{},
     z_index: 0,
@@ -98,6 +104,11 @@ defmodule LiveFlow.Node do
     * `:connectable` - Whether connectable (default: `true`)
     * `:selectable` - Whether selectable (default: `true`)
     * `:deletable` - Whether deletable (default: `true`)
+    * `:resizable` - Whether resizable (default: `false`)
+    * `:hidden` - Whether hidden (default: `false`)
+    * `:width` / `:height` - Explicit dimensions. Measured dimensions replace
+      them once the node renders (resizable nodes keep them)
+    * `:drag_handle` - CSS selector of the element(s) the node can be dragged by
     * `:parent_id` - Parent node ID for grouping
     * `:extent` - Movement constraint
     * `:style` - Custom inline styles
@@ -124,6 +135,11 @@ defmodule LiveFlow.Node do
       connectable: Keyword.get(opts, :connectable, true),
       selectable: Keyword.get(opts, :selectable, true),
       deletable: Keyword.get(opts, :deletable, true),
+      resizable: Keyword.get(opts, :resizable, false),
+      hidden: Keyword.get(opts, :hidden, false),
+      width: Keyword.get(opts, :width),
+      height: Keyword.get(opts, :height),
+      drag_handle: Keyword.get(opts, :drag_handle),
       parent_id: Keyword.get(opts, :parent_id),
       extent: Keyword.get(opts, :extent),
       style: Keyword.get(opts, :style, %{}),
