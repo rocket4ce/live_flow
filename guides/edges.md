@@ -227,7 +227,8 @@ State.update_edge(flow, "e5", style: %{stroke: color}, marker_end: %{type: :arro
 An edge with a `:label` shows it in a small box at the middle of its path. The box
 uses the node colors (`--lf-node-bg`, `--lf-node-border`, `--lf-text-primary`) plus
 any `:label_style` you set. Double-click a label to edit it in place. Enter or
-clicking away saves the change, Escape cancels it. Saving pushes
+clicking away saves the change, Escape cancels it. While you edit, server updates leave
+that label alone; the next update after the edit ends brings it up to date. Saving pushes
 `lf:edge_label_change` with `%{"id" => id, "label" => text}`. The label is `nil`
 when the text is empty:
 

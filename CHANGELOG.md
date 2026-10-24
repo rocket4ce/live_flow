@@ -1,5 +1,23 @@
 # Changelog
 
+## v0.3.1 (2026-10-24)
+
+### Bug Fixes
+
+- **Edge label editing survives server updates.** A re-render of the flow while a label was being
+  edited (for example the selection update that follows the double click) made morphdom remove
+  the focused input. Chrome fires `blur` during that removal and the editor's blur handler
+  detached the input first, so the patch aborted with `NotFoundError: Failed to execute
+  'removeChild' on 'Node'` and the editor closed. The label wrapper is now `phx-update="ignore"`
+  while editing: server changes to that label are applied by the next update after Enter, Escape
+  or a click elsewhere ends the edit.
+
+### Showcase
+
+- `flow_example/` uses esbuild 0.25.12 and runs the dev watcher with `--watch-delay=200`, so it no
+  longer fails with `Could not resolve "phoenix-colocated/flow_example"` while LiveView rewrites
+  the colocated hook manifests after a recompile.
+
 ## v0.3.0 (2026-10-23)
 
 First release since v0.2.3: sync with the latest xyflow releases (React Flow 12.10 → 12.12,
