@@ -42,7 +42,8 @@ config :flow_example, FlowExample.Mailer, adapter: Swoosh.Adapters.Local
 # not copied into deps/. The alias points `import ... from "live_flow"` at the
 # library sources, which is what `deps/live_flow` resolves to for Hex users.
 config :esbuild,
-  version: "0.25.4",
+  # >= 0.25.6 for the `--watch-delay` flag used by the dev watcher
+  version: "0.25.12",
   flow_example: [
     args:
       ~w(js/app.js --bundle --target=es2022 --outdir=../priv/static/assets/js --external:/fonts/* --external:/images/* --alias:@=. --alias:live_flow=../../assets/js/live_flow/index.js),

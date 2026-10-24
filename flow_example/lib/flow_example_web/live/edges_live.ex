@@ -260,7 +260,9 @@ defmodule FlowExampleWeb.EdgesLive do
         "Same side",
         "right → right",
         "hero-arrow-uturn-right",
-        :slate, outputs: false)
+        :slate,
+        outputs: false
+      )
       |> with_handles([Handle.target(:right)])
     ]
 

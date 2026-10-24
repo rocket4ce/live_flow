@@ -27,7 +27,12 @@ config :flow_example, FlowExampleWeb.Endpoint,
   debug_errors: true,
   secret_key_base: "2KK7UUrmREA00dw5Iq5nI3M/8i2g88+bff6WddmKQGRau/IVV/niJvxoWorLeRvg",
   watchers: [
-    esbuild: {Esbuild, :install_and_run, [:flow_example, ~w(--sourcemap=inline --watch)]},
+    # LiveView deletes and rewrites the phoenix-colocated manifests (index.js) after
+    # every recompile; without the delay esbuild can rebuild in between and fail with
+    # `Could not resolve "phoenix-colocated/flow_example"`
+    esbuild:
+      {Esbuild, :install_and_run,
+       [:flow_example, ~w(--sourcemap=inline --watch --watch-delay=200)]},
     tailwind: {Tailwind, :install_and_run, [:flow_example, ~w(--watch)]}
   ]
 

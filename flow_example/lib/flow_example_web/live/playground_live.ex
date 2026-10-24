@@ -149,7 +149,7 @@ defmodule FlowExampleWeb.PlaygroundLive do
           <.option_group title="Shortcuts">
             <div class="grid grid-cols-[auto_1fr] items-center gap-x-3 gap-y-1.5 text-xs text-base-content/70">
               <span><.kbd>⌘ C</.kbd>
-              
+
               <.kbd>⌘ V</.kbd></span><span>Copy / paste</span>
               <span><.kbd>⌘ D</.kbd></span><span>Duplicate</span>
               <span><.kbd>⌘ Z</.kbd></span><span>Undo</span>
