@@ -8,6 +8,15 @@
   now gets the same change information a `<.component node={@node}>` call would, so when a node's
   data changes LiveView sends just the fields that differ instead of re-rendering the whole node.
 
+## v0.3.2 (2026-10-24)
+
+### Bug Fixes
+
+- **A client node of unknown type no longer crashes the flow.** `lf:node_change` add and replace
+  events ran `String.to_existing_atom/1` on the type the browser sent, so a type that was not
+  already an atom raised and took the LiveView down. Such nodes now draw as `:default`, as unknown
+  edge types already fall back to `:bezier`.
+
 ## v0.3.1 (2026-10-24)
 
 ### Bug Fixes
