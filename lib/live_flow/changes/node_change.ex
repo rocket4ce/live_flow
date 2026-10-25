@@ -122,7 +122,7 @@ defmodule LiveFlow.Changes.NodeChange do
         node_data["id"],
         normalize_position(node_data["position"]),
         Map.get(node_data, "data", %{}),
-        type: String.to_existing_atom(node_data["type"] || "default")
+        type: parse_node_type(node_data["type"])
       )
 
     State.add_node(state, node)
@@ -136,7 +136,7 @@ defmodule LiveFlow.Changes.NodeChange do
         node_data["id"],
         normalize_position(node_data["position"]),
         Map.get(node_data, "data", %{}),
-        type: String.to_existing_atom(node_data["type"] || "default")
+        type: parse_node_type(node_data["type"])
       )
 
     state
@@ -255,4 +255,15 @@ defmodule LiveFlow.Changes.NodeChange do
   end
 
   defp stringify_keys(value), do: value
+
+  # A node type the client names must already exist as an atom; anything else
+  # draws as a default node instead of crashing the page.
+  defp parse_node_type(type) when is_binary(type) do
+    String.to_existing_atom(type)
+  rescue
+    ArgumentError -> :default
+  end
+
+  defp parse_node_type(type) when is_atom(type) and not is_nil(type), do: type
+  defp parse_node_type(_type), do: :default
 end
