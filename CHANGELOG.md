@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Improvements
+
+- **Function-component nodes send only what changed.** A node type given as a function component
+  now gets the same change information a `<.component node={@node}>` call would, so when a node's
+  data changes LiveView sends just the fields that differ instead of re-rendering the whole node.
+
 ## v0.3.2 (2026-10-24)
 
 ### Bug Fixes
