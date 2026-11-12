@@ -51,7 +51,7 @@ defmodule FlowExample.MixProject do
       {:phoenix_live_reload, "~> 1.2", only: :dev},
       {:phoenix_live_view, "~> 1.2.0"},
       {:lazy_html, ">= 0.1.0", only: :test},
-      {:phoenix_live_dashboard, "~> 0.8.3"},
+      {:phoenix_live_dashboard, "~> 0.9.1"},
       {:esbuild, "~> 0.10", runtime: Mix.env() == :dev},
       {:tailwind, "~> 0.5", runtime: Mix.env() == :dev},
       {:heroicons,
@@ -63,7 +63,7 @@ defmodule FlowExample.MixProject do
        depth: 1},
       {:daisyui,
        github: "saadeghi/daisyui",
-       tag: "v5.5.20",
+       tag: "v5.7.50",
        sparse: "packages/bundle",
        app: false,
        compile: false,
@@ -74,7 +74,7 @@ defmodule FlowExample.MixProject do
       {:telemetry_poller, "~> 1.0"},
       {:gettext, "~> 1.0"},
       {:jason, "~> 1.2"},
-      {:dns_cluster, "~> 0.2.0"},
+      {:dns_cluster, "~> 0.3.1"},
       {:bandit, "~> 1.5"}
     ]
   end
