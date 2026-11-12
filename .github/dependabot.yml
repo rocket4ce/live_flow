@@ -1,0 +1,28 @@
+version: 2
+updates:
+  # Library (Hex package)
+  - package-ecosystem: mix
+    directory: "/"
+    schedule:
+      interval: weekly
+    groups:
+      library:
+        patterns: ["*"]
+
+  # Showcase app
+  - package-ecosystem: mix
+    directory: "/flow_example"
+    schedule:
+      interval: weekly
+    groups:
+      example:
+        patterns: ["*"]
+
+  # Actions used by the CI workflow
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: monthly
+    groups:
+      actions:
+        patterns: ["*"]
