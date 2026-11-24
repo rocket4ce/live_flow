@@ -1,5 +1,38 @@
 # Changelog
 
+## v0.3.4 (2026-11-24)
+
+### Security
+
+- **Remote cursor labels are no longer built as markup.** The cursor overlay wrote each remote
+  user's label with `innerHTML`, so the name and color a peer broadcast were parsed as HTML. An
+  app that passes a user-supplied display name to `LiveFlow.Collaboration.User.new/2` — the
+  pattern the collaboration guide shows — let that user run script in every other collaborator's
+  browser. Labels are now created with `document.createElement` and `textContent`, and the SVG
+  pointer with `createElementNS`, so a name only ever renders as text.
+
+- **Display colors are checked before they reach a `style` attribute.** A color carrying extra CSS
+  (`red; position: fixed; inset: 0`) could cover the page from a presence badge or a cursor label.
+  The new `LiveFlow.Collaboration.User.safe_color/2` is applied to every color LiveFlow renders,
+  including those given to `User.new/2` and those read from presence metadata. Anything that could
+  end the declaration, start markup or fetch a URL falls back to the palette color; ordinary CSS
+  colors, including `oklch()`, `color-mix()` and `var()`, pass through unchanged.
+
+- **A malformed change payload no longer takes the LiveView down.** `LiveFlow.Changes.NodeChange`
+  did arithmetic on the `x`/`y` the browser sent without checking them, so a position such as
+  `%{"x" => "abc"}` — or a missing position, or a node that was not a map — raised inside
+  `apply_change/2`. `LiveFlow.Changes.EdgeChange` had the same gap for `edge` payloads. Both now
+  drop a change they cannot read and keep applying the rest. This matters most for collaborative
+  flows, where the documented pattern relays the browser's change maps to every peer in the room,
+  and for apps that hold shared flow state in a process of their own: a single bad payload took
+  that process down with it.
+
+### Dependencies
+
+- The library and the showcase app move off versions with published advisories: phoenix 1.8.17,
+  phoenix_live_view 1.2.15 and plug 1.20.4, plus db_connection 2.10.3, swoosh 1.30.0 and idna
+  8.0.0 in `flow_example/`. `mix hex.audit` is clean in both projects.
+
 ## v0.3.3 (2026-11-12)
 
 ### Improvements

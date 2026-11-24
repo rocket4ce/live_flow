@@ -55,22 +55,10 @@ defmodule LiveFlow.Changes.EdgeChange do
   """
   @spec apply_change(State.t(), map()) :: State.t()
   def apply_change(state, %{"type" => "add"} = change) do
-    edge_data = change["edge"]
-
-    edge =
-      Edge.new(
-        edge_data["id"],
-        edge_data["source"],
-        edge_data["target"],
-        source_handle: edge_data["source_handle"],
-        target_handle: edge_data["target_handle"],
-        type: parse_edge_type(edge_data["type"]),
-        animated: edge_data["animated"] || false,
-        label: edge_data["label"],
-        data: Map.get(edge_data, "data", %{})
-      )
-
-    State.add_edge(state, edge)
+    case build_edge(change["edge"]) do
+      {:ok, edge} -> State.add_edge(state, edge)
+      :error -> state
+    end
   end
 
   def apply_change(state, %{"type" => "remove"} = change) do
@@ -89,24 +77,15 @@ defmodule LiveFlow.Changes.EdgeChange do
   end
 
   def apply_change(state, %{"type" => "replace"} = change) do
-    edge_data = change["edge"]
+    case build_edge(change["edge"]) do
+      {:ok, edge} ->
+        state
+        |> State.remove_edge(edge.id)
+        |> State.add_edge(edge)
 
-    edge =
-      Edge.new(
-        edge_data["id"],
-        edge_data["source"],
-        edge_data["target"],
-        source_handle: edge_data["source_handle"],
-        target_handle: edge_data["target_handle"],
-        type: parse_edge_type(edge_data["type"]),
-        animated: edge_data["animated"] || false,
-        label: edge_data["label"],
-        data: Map.get(edge_data, "data", %{})
-      )
-
-    state
-    |> State.remove_edge(edge.id)
-    |> State.add_edge(edge)
+      :error ->
+        state
+    end
   end
 
   # Handle atom keys (when created from Elixir)
@@ -157,6 +136,33 @@ defmodule LiveFlow.Changes.EdgeChange do
       "selected" => selected
     }
   end
+
+  # Edge payloads arrive from the browser: anything that is not a well formed
+  # edge map drops the change instead of crashing the LiveView applying it.
+  defp build_edge(edge_data) when is_map(edge_data) do
+    id = edge_data["id"]
+    source = edge_data["source"]
+    target = edge_data["target"]
+
+    if is_nil(id) or is_nil(source) or is_nil(target) do
+      :error
+    else
+      {:ok,
+       Edge.new(
+         id,
+         source,
+         target,
+         source_handle: edge_data["source_handle"],
+         target_handle: edge_data["target_handle"],
+         type: parse_edge_type(edge_data["type"]),
+         animated: edge_data["animated"] || false,
+         label: edge_data["label"],
+         data: Map.get(edge_data, "data", %{})
+       )}
+    end
+  end
+
+  defp build_edge(_edge_data), do: :error
 
   defp parse_edge_type(nil), do: :bezier
   defp parse_edge_type(type) when is_atom(type), do: type

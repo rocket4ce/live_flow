@@ -6,6 +6,26 @@
  * when the viewport changes. Uses lerp interpolation for smooth
  * remote cursor movement.
  */
+const SVG_NS = 'http://www.w3.org/2000/svg';
+
+// Names and colors belong to *other* users and reach the browser through the
+// server, so they are never trusted markup. The name is written with
+// textContent, and the color must stay a single CSS value — mirrors
+// LiveFlow.Collaboration.User.safe_color/2 on the server.
+const COLOR_FORBIDDEN = [';', '{', '}', '<', '>', '"', "'", '\\', '/*', 'url(', 'expression('];
+const COLOR_MAX_LENGTH = 64;
+const FALLBACK_COLOR = '#888888';
+
+function safeColor(color) {
+  if (typeof color !== 'string') return FALLBACK_COLOR;
+
+  const trimmed = color.trim();
+  if (!trimmed || trimmed.length > COLOR_MAX_LENGTH) return FALLBACK_COLOR;
+
+  const lowered = trimmed.toLowerCase();
+  return COLOR_FORBIDDEN.some((token) => lowered.includes(token)) ? FALLBACK_COLOR : trimmed;
+}
+
 export class CursorManager {
   constructor(hook) {
     this.hook = hook;
@@ -121,20 +141,46 @@ export class CursorManager {
   }
 
   createCursorElement(userId, color, name) {
+    const cursorColor = safeColor(color);
+    const label = name == null ? '' : String(name);
+
     const el = document.createElement('div');
     el.className = 'lf-remote-cursor';
     el.dataset.userId = userId;
-    el.innerHTML =
-      '<svg width="16" height="20" viewBox="0 0 16 20" fill="none">' +
-        '<path d="M0 0L16 12L8 12L6 20L0 0Z" fill="' + color + '" stroke="white" stroke-width="1"/>' +
-      '</svg>' +
-      '<span class="lf-remote-cursor-label" style="background:' + color + '">' + name + '</span>';
+
+    const svg = document.createElementNS(SVG_NS, 'svg');
+    svg.setAttribute('width', '16');
+    svg.setAttribute('height', '20');
+    svg.setAttribute('viewBox', '0 0 16 20');
+    svg.setAttribute('fill', 'none');
+
+    const arrow = document.createElementNS(SVG_NS, 'path');
+    arrow.setAttribute('d', 'M0 0L16 12L8 12L6 20L0 0Z');
+    arrow.setAttribute('fill', cursorColor);
+    arrow.setAttribute('stroke', 'white');
+    arrow.setAttribute('stroke-width', '1');
+    svg.appendChild(arrow);
+
+    const labelEl = document.createElement('span');
+    labelEl.className = 'lf-remote-cursor-label';
+    labelEl.style.background = cursorColor;
+    labelEl.textContent = label;
+
+    el.append(svg, labelEl);
 
     if (this.overlayEl) {
       this.overlayEl.appendChild(el);
     }
 
-    return { element: el, flowX: 0, flowY: 0, targetX: undefined, targetY: undefined, color, name };
+    return {
+      element: el,
+      flowX: 0,
+      flowY: 0,
+      targetX: undefined,
+      targetY: undefined,
+      color: cursorColor,
+      name: label
+    };
   }
 
   positionCursor(cursor) {

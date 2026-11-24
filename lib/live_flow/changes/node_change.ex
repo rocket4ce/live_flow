@@ -73,30 +73,35 @@ defmodule LiveFlow.Changes.NodeChange do
   """
   @spec apply_change(State.t(), map()) :: State.t()
   def apply_change(state, %{"type" => "position"} = change) do
-    id = change["id"]
-    position = normalize_position(change["position"])
-    dragging = change["dragging"] || false
+    case fetch_position(change["position"]) do
+      {:ok, position} ->
+        dragging = change["dragging"] || false
 
-    State.update_node(state, id, fn node ->
-      %{node | position: position, dragging: dragging}
-    end)
+        State.update_node(state, change["id"], fn node ->
+          %{node | position: position, dragging: dragging}
+        end)
+
+      :error ->
+        state
+    end
   end
 
   def apply_change(state, %{"type" => "dimensions"} = change) do
-    id = change["id"]
-    width = change["width"]
-    height = change["height"]
-
-    State.update_node(state, id, fn node ->
-      # Skip content-measurement dimensions for resizable nodes that have
-      # already been explicitly resized — prevents ResizeObserver from
-      # overwriting user-set dimensions with content-fit sizes.
-      if node.resizable && node.measured && node.width && node.height do
-        node
-      else
-        Node.set_dimensions(node, width, height)
-      end
-    end)
+    with {:ok, width} <- fetch_dimension(change["width"]),
+         {:ok, height} <- fetch_dimension(change["height"]) do
+      State.update_node(state, change["id"], fn node ->
+        # Skip content-measurement dimensions for resizable nodes that have
+        # already been explicitly resized — prevents ResizeObserver from
+        # overwriting user-set dimensions with content-fit sizes.
+        if node.resizable && node.measured && node.width && node.height do
+          node
+        else
+          Node.set_dimensions(node, width, height)
+        end
+      end)
+    else
+      :error -> state
+    end
   end
 
   def apply_change(state, %{"type" => "select"} = change) do
@@ -115,51 +120,42 @@ defmodule LiveFlow.Changes.NodeChange do
   end
 
   def apply_change(state, %{"type" => "add"} = change) do
-    node_data = change["node"]
-
-    node =
-      Node.new(
-        node_data["id"],
-        normalize_position(node_data["position"]),
-        Map.get(node_data, "data", %{}),
-        type: parse_node_type(node_data["type"])
-      )
-
-    State.add_node(state, node)
+    case build_node(change["node"]) do
+      {:ok, node} -> State.add_node(state, node)
+      :error -> state
+    end
   end
 
   def apply_change(state, %{"type" => "replace"} = change) do
-    node_data = change["node"]
+    case build_node(change["node"]) do
+      {:ok, node} ->
+        state
+        |> State.remove_node(node.id)
+        |> State.add_node(node)
 
-    node =
-      Node.new(
-        node_data["id"],
-        normalize_position(node_data["position"]),
-        Map.get(node_data, "data", %{}),
-        type: parse_node_type(node_data["type"])
-      )
-
-    state
-    |> State.remove_node(node.id)
-    |> State.add_node(node)
+      :error ->
+        state
+    end
   end
 
   def apply_change(state, %{"type" => "resize"} = change) do
-    id = change["id"]
-    width = change["width"]
-    height = change["height"]
-    position = change["position"]
-    resizing = change["resizing"] || false
+    with {:ok, width} <- fetch_dimension(change["width"]),
+         {:ok, height} <- fetch_dimension(change["height"]),
+         {:ok, position} <- fetch_optional_position(change["position"]) do
+      resizing = change["resizing"] || false
 
-    State.update_node(state, id, fn node ->
-      node = %{node | width: width, height: height, measured: true, resizing: resizing}
+      State.update_node(state, change["id"], fn node ->
+        node = %{node | width: width, height: height, measured: true, resizing: resizing}
 
-      if position do
-        %{node | position: normalize_position(position)}
-      else
-        node
-      end
-    end)
+        if position do
+          %{node | position: position}
+        else
+          node
+        end
+      end)
+    else
+      :error -> state
+    end
   end
 
   # Handle atom keys (when created from Elixir)
@@ -242,8 +238,43 @@ defmodule LiveFlow.Changes.NodeChange do
     if position, do: Map.put(change, "position", position), else: change
   end
 
-  defp normalize_position(%{"x" => x, "y" => y}), do: %{x: x / 1.0, y: y / 1.0}
-  defp normalize_position(%{x: x, y: y}), do: %{x: x / 1.0, y: y / 1.0}
+  defp build_node(node_data) when is_map(node_data) do
+    id = node_data["id"]
+
+    with true <- not is_nil(id),
+         {:ok, position} <- fetch_position(node_data["position"]) do
+      {:ok,
+       Node.new(
+         id,
+         position,
+         Map.get(node_data, "data", %{}),
+         type: parse_node_type(node_data["type"])
+       )}
+    else
+      _ -> :error
+    end
+  end
+
+  defp build_node(_node_data), do: :error
+
+  # Change payloads arrive from the browser, so every number is untrusted:
+  # a malformed one drops the change instead of crashing the LiveView that
+  # applies it (and, in collaborative flows, every peer it is relayed to).
+  defp fetch_position(%{"x" => x, "y" => y}), do: build_position(x, y)
+  defp fetch_position(%{x: x, y: y}), do: build_position(x, y)
+  defp fetch_position(_position), do: :error
+
+  defp fetch_optional_position(nil), do: {:ok, nil}
+  defp fetch_optional_position(position), do: fetch_position(position)
+
+  defp build_position(x, y) when is_number(x) and is_number(y) do
+    {:ok, %{x: x / 1.0, y: y / 1.0}}
+  end
+
+  defp build_position(_x, _y), do: :error
+
+  defp fetch_dimension(value) when is_number(value), do: {:ok, value}
+  defp fetch_dimension(_value), do: :error
 
   defp stringify_keys(map) when is_map(map) do
     map

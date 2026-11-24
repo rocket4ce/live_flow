@@ -357,7 +357,8 @@ defmodule LiveFlow.Collaboration do
     ~H"""
     <div class="flex items-center gap-3">
       <div class="flex items-center gap-2 text-sm font-medium">
-        <div class="w-3 h-3 rounded-full" style={"background: #{@current_user.color}"}></div>
+        <div class="w-3 h-3 rounded-full" style={"background: #{User.safe_color(@current_user.color)}"}>
+        </div>
         <span>{@current_user.name} (you)</span>
       </div>
       <div class="text-base-content/30">|</div>
@@ -383,7 +384,7 @@ defmodule LiveFlow.Collaboration do
     assigns =
       assigns
       |> assign(:name, Map.get(first_meta, :name, "?"))
-      |> assign(:color, Map.get(first_meta, :color, "#888"))
+      |> assign(:color, User.safe_color(Map.get(first_meta, :color)))
 
     ~H"""
     <span class="flex items-center gap-1 text-xs">
