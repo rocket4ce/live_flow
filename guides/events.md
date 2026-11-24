@@ -55,6 +55,13 @@ Change maps in `lf:node_change`:
 
 `LiveFlow.Changes.NodeChange.apply_changes/2` handles all of them.
 
+Change maps come from the browser, so `apply_changes/2` treats them as input,
+not as fact: a change whose coordinates or sizes are not numbers, or whose
+node payload is not a usable map, is dropped and the rest of the list still
+applies. `LiveFlow.Changes.EdgeChange.apply_changes/2` does the same with edge
+payloads. You still own the question of *who* may change *what* — see
+[Authorizing changes](#authorizing-changes).
+
 ### Edges
 
 | Event | Payload | When |
@@ -124,6 +131,28 @@ position a menu inside it) and `"position"` is in flow coordinates.
 
 `lf:container_resize` is sent to the Flow component itself (minimap and
 virtualization) and never reaches your LiveView.
+
+## Authorizing Changes
+
+Dropping unreadable payloads keeps a malformed change from crashing the
+LiveView; it does not decide who is allowed to change what. Every `lf:*` event
+is a message from a browser, so a client can send a change for any node id it
+knows — including one it is not supposed to touch, and including change types
+your UI never offers.
+
+Where that matters, filter before applying:
+
+```elixir
+def handle_event("lf:node_change", %{"changes" => changes}, socket) do
+  changes = Enum.filter(changes, &editable?(socket.assigns.current_scope, &1))
+
+  {:noreply, assign(socket, flow: NodeChange.apply_changes(socket.assigns.flow, changes))}
+end
+```
+
+In a collaborative flow this is also where you decide what to relay: pass the
+filtered list to `LiveFlow.Collaboration.broadcast_change/2`, not the raw one,
+so a peer only ever receives changes you accepted.
 
 ## Events You Push to the Client
 
