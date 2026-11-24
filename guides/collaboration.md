@@ -277,6 +277,40 @@ user.color  #=> "#ef4444"
 The color is chosen from a palette of 10 visually distinct colors. The same user
 ID always produces the same name and color across sessions.
 
+### Names and colors from your own users
+
+Both fields end up on everyone else's screen, so it is normal to pass the name
+your application already has for the person:
+
+```elixir
+user = User.new(current_user.id, name: current_user.display_name)
+```
+
+That is safe. LiveFlow renders a display name as text — the cursor label is
+built with `textContent` and the presence badge with regular HEEx
+interpolation — so a name containing markup shows up as the characters the
+person typed, not as HTML.
+
+Colors go through `LiveFlow.Collaboration.User.safe_color/2`, because they are
+rendered inside a `style` attribute. Any CSS color works, including
+`oklch()`, `color-mix()` and `var()`; a value that could end the declaration,
+start markup or fetch a URL is replaced by the palette color:
+
+```elixir
+User.new("user_abc123", color: "oklch(60% 0.25 292)").color
+#=> "oklch(60% 0.25 292)"
+
+User.new("user_abc123", color: "red; position: fixed; inset: 0").color
+#=> "#3b82f6"
+```
+
+Call `safe_color/2` yourself if you render a color that did not come from
+`User.new/2`:
+
+```elixir
+<div style={"background: #{User.safe_color(@color)}"}></div>
+```
+
 ## Displaying Online Users
 
 LiveFlow provides a `presence_list` function component for showing who is online:
