@@ -63,7 +63,7 @@ defmodule FlowExample.MixProject do
        depth: 1},
       {:daisyui,
        github: "saadeghi/daisyui",
-       tag: "v5.7.50",
+       tag: "v5.8.2",
        sparse: "packages/bundle",
        app: false,
        compile: false,
